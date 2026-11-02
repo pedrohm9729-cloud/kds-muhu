@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#14120F" android:pathData="M0,0h108v108h-108z" />
+    <!-- Pantalla -->
+    <path android:fillColor="#25211C" android:pathData="M22,28h64a4,4 0,0 1,4 4v38a4,4 0,0 1,-4 4h-64a4,4 0,0 1,-4 -4v-38a4,4 0,0 1,4 -4z" />
+    <!-- Tickets: verde, ámbar, rojo -->
+    <path android:fillColor="#3FB36B" android:pathData="M26,34h16v8h-16z" />
+    <path android:fillColor="#E9A13B" android:pathData="M46,34h16v8h-16z" />
+    <path android:fillColor="#E2504A" android:pathData="M66,34h16v8h-16z" />
+    <path android:fillColor="#A59C8E" android:pathData="M26,46h16v3h-16zM26,53h12v3h-12zM46,46h16v3h-16zM46,53h12v3h-12zM66,46h16v3h-16zM66,53h12v3h-12z" />
+    <!-- Base -->
+    <path android:fillColor="#C08A54" android:pathData="M48,74h12v8h-12zM38,82h32v4h-32z" />
+</vector>
