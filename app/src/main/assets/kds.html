@@ -116,7 +116,7 @@ const mmss=seg=>{seg=Math.max(0,Math.floor(seg));return String(Math.floor(seg/60
 const hhmm=t=>new Date(t*1000).toLocaleTimeString("es-PE",{hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false});
 const semaf=m=>m<est.verde?"v":m<est.ambar?"a":"r", cls=m=>({v:"cv",a:"ca",r:"cr"})[semaf(m)];
 function post(accion,extra){return fetch("/accion",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({accion,...extra})})}
-function bip(t){if(!ctx)return;const N={nueva:[880,1175],listo:[660,880,1320],anulacion:[440,330,440],cambio:[988,988]}[t]||[700];
+function bip(t){if(window.Android&&vista==="cocina")return; /* en la tablet suena el sonido nativo */ if(!ctx)return;if(ctx.state==="suspended")ctx.resume();const N={nueva:[880,1175],listo:[660,880,1320],anulacion:[440,330,440],cambio:[988,988]}[t]||[700];
  let s=ctx.currentTime;for(const f of N){const o=ctx.createOscillator(),g=ctx.createGain();o.type="square";o.frequency.value=f;
  g.gain.setValueAtTime(.14,s);g.gain.exponentialRampToValueAtTime(.001,s+.2);o.connect(g).connect(ctx.destination);o.start(s);o.stop(s+.21);s+=.24}}
 function audio(){if(ctx)return;try{ctx=new (window.AudioContext||window.webkitAudioContext)()}catch(e){}
@@ -218,7 +218,11 @@ function conectar(){const es=new EventSource("/eventos");
  es.onmessage=e=>{const d=JSON.parse(e.data);est=d;desfase=d.ahora-Date.now()/1000;
   for(const c of d.comandas){const v=vistos.get(c.id);if(listo&&v!==c.actualizada_ts)flash.add(c.id);vistos.set(c.id,c.actualizada_ts)}
   const primera=!listo;listo=true;pintar();
-  if(primera){if(vista!=="tiempos")abrirCapa();else $("capa").hidden=true;return}
+  if(primera){
+   // El turno se mantiene hasta que alguien toque "Cambiar turno". En la app no se vuelve a pedir el nombre.
+   if(vista==="tiempos"||(window.Android&&(vista!=="cocina"||est.encargado))){$("capa").hidden=true;audio()}
+   else abrirCapa();
+   return}
   const suena=vista==="cocina"?["nueva","cambio","anulacion"]:vista==="caja"?["listo","anulacion"]:[];
   if(suena.includes(d.evento))bip(d.evento)}}
 ruta();conectar();setInterval(()=>{if(vista!=="tiempos")pintar()},1000);

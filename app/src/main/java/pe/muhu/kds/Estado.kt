@@ -42,6 +42,8 @@ class Estado(private val dir: File) {
     var ip: String = "-"
 
     val clientes = CopyOnWriteArrayList<LinkedBlockingQueue<String>>()
+    /** Aviso al servicio para sonar en la tablet aunque la pantalla se esté recargando. */
+    @Volatile var alEvento: ((String) -> Unit)? = null
 
     private val fFecha = SimpleDateFormat("yyyy-MM-dd", Locale.US)
     private val fHora = SimpleDateFormat("HH:mm:ss", Locale.US)
@@ -170,6 +172,7 @@ class Estado(private val dir: File) {
         guardar()
         val msg = snapshot(evento)
         clientes.forEach { it.offer(msg) }
+        try { alEvento?.invoke(evento) } catch (_: Exception) { }
     }
 
     // --------------------------------------------------------------- lógica

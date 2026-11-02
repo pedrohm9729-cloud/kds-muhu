@@ -15,6 +15,7 @@ import android.view.WindowInsets
 import android.view.WindowInsetsController
 import android.view.WindowManager
 import android.webkit.JavascriptInterface
+import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
@@ -47,6 +48,10 @@ class MainActivity : Activity() {
                         return true
                     }
                     return false
+                }
+                override fun onRenderProcessGone(v: WebView, d: RenderProcessGoneDetail): Boolean {
+                    // Si Android cierra el motor de la página, se recrea sin cerrar la app
+                    recreate(); return true
                 }
                 override fun onReceivedError(v: WebView, r: WebResourceRequest, e: WebResourceError) {
                     // El servidor aún está arrancando: reintenta

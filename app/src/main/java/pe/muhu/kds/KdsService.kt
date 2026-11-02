@@ -8,6 +8,10 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.media.AudioManager
+import android.media.ToneGenerator
+import android.os.Handler
+import android.os.HandlerThread
 import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.IBinder
@@ -59,6 +63,7 @@ class KdsService : Service() {
         if (estado == null) {
             val e = Estado(filesDir)
             e.ip = ipLocal()
+            e.alEvento = { ev -> sonar(ev) }
             estado = e
             val pagina = assets.open("kds.html").bufferedReader(Charsets.UTF_8).readText()
             impresora = ServidorImpresora(e, File(filesDir, "capturas")).also { it.iniciar() }
@@ -84,6 +89,25 @@ class KdsService : Service() {
             .build()
         if (Build.VERSION.SDK_INT >= 34) startForeground(1, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
         else startForeground(1, n)
+    }
+
+    // Sonido nativo en la tablet de cocina: suena siempre, sin tocar la pantalla
+    private val hiloSonido = HandlerThread("sonido").apply { start() }
+    private val hSonido = Handler(hiloSonido.looper)
+    private val tono: ToneGenerator? by lazy {
+        try { ToneGenerator(AudioManager.STREAM_MUSIC, 100) } catch (_: Exception) { null }
+    }
+
+    private fun sonar(evento: String) {
+        val serie = when (evento) {
+            "nueva" -> listOf(ToneGenerator.TONE_PROP_BEEP2 to 300, ToneGenerator.TONE_PROP_BEEP2 to 300)
+            "cambio" -> listOf(ToneGenerator.TONE_PROP_ACK to 400)
+            "anulacion" -> listOf(ToneGenerator.TONE_SUP_ERROR to 600)
+            else -> return
+        }
+        hSonido.post {
+            for ((t, ms) in serie) { tono?.startTone(t, ms); Thread.sleep(ms + 150L) }
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
