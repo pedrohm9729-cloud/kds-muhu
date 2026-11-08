@@ -200,6 +200,9 @@ function ajustes(){const and=!!window.Android;if(!repF)repF=hoyLocal();
  <button class="b" id="btnRep">📄 ${and?"Compartir reporte PDF":"Descargar reporte PDF"}</button>
  <span class="sub">Comandas, tiempo de cada una, promedio, producto que más demoró y resultado por encargado. Listo para enviar al grupo de cocina.</span></div>
  ${and?sheetsHtml():""}
+ ${and?`<h3>Sonido de pedidos</h3><div class="aj"><div class="filtroT">${["Normal","Fuerte","Máximo"].map((t,i)=>`<button data-vol="${i}" class="${Android.volumen()===i?"on":""}">${t}</button>`).join("")}</div>
+ <button class="b" id="btnSon">🔊 Probar sonido</button>
+ <span class="sub">Suena por el canal de alarma y sube el volumen sola en cada pedido. Máximo repite el aviso 3 veces.</span></div>`:""}
  <h3>Ajustes</h3><div class="aj"><label>Verde hasta <input id="semV" type="number" min="1" max="60" value="${est.verde}"> min</label>
  <label>Rojo desde <input id="semA" type="number" min="2" max="120" value="${est.ambar}"> min</label>
  <button class="b" id="btnSem">Guardar semáforo</button>
@@ -246,6 +249,8 @@ $("vista").addEventListener("input",e=>{if(e.target.id==="sUrl")sUrl=e.target.va
 $("vista").addEventListener("click",e=>{const t=e.target;
  if(t.id==="btnSem"){post("config",{verde:+$("semV").value,ambar:+$("semA").value}).then(r=>{if(!r.ok)alertar("El rojo debe ser mayor que el verde")})}
  if(t.id==="btnInicio"&&window.Android)Android.elegirInicio();
+ if(t.id==="btnSon"&&window.Android)Android.probarSonido();
+ if(t.dataset&&t.dataset.vol!==undefined&&window.Android){Android.ponerVolumen(+t.dataset.vol);document.querySelectorAll("[data-vol]").forEach(b=>b.classList.toggle("on",b===t))}
  if(t.id==="btnSync"){post("sync_config",{url:sUrl.trim(),clave:sClave.trim()}).then(r=>{if(!r.ok)alertar("La URL debe empezar con https://script.google.com/")})}
  if(t.id==="btnSyncYa")post("sync_ahora",{});
  if(t.id==="btnRep"){repF=$("repF").value||hoyLocal();if(window.Android)Android.reportePdf(repF,repT);else location.href="/reporte.pdf?fecha="+repF+(repT?"&turno="+repT:"")}

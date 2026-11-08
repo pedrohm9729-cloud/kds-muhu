@@ -139,6 +139,9 @@ class MainActivity : Activity() {
                 }
             }
         }
+        @JavascriptInterface fun volumen(): Int = Sonido.nivel(this@MainActivity)
+        @JavascriptInterface fun ponerVolumen(n: Int) { Sonido.ponerNivel(this@MainActivity, n); Sonido.sonar(this@MainActivity, "prueba") }
+        @JavascriptInterface fun probarSonido() { Sonido.sonar(this@MainActivity, "prueba") }
         @JavascriptInterface fun recargar() { runOnUiThread { web.loadUrl(URL) } }
     }
 }
