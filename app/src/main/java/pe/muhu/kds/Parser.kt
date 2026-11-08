@@ -12,6 +12,8 @@ class Item(
     var hecho: Boolean = false,
     var cancelado: Boolean = false,
     var marca: String? = null,
+    /** Estación que lo prepara: "cocina" o "barra". */
+    var est: String = "cocina",
 )
 
 class Parseada(

@@ -18,17 +18,19 @@ import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
 
 const val PUERTO_IMPRESORA = 9100
+const val PUERTO_BARRA = 9101
 const val PUERTO_WEB = 8080
 private const val TAG = "KDS"
 
-/** Impresora virtual: recibe los tickets ESC/POS que el POS envía al puerto 9100. */
-class ServidorImpresora(private val estado: Estado, private val capturas: File) {
+/** Impresora virtual: recibe los tickets ESC/POS que el POS envía al puerto 9100 (cocina) o 9101 (barra). */
+class ServidorImpresora(private val estado: Estado, private val capturas: File,
+                        private val puerto: Int = PUERTO_IMPRESORA, private val barra: Boolean = false) {
     @Volatile private var srv: ServerSocket? = null
 
     fun iniciar() = thread(name = "impresora", isDaemon = true) {
         while (true) {
             try {
-                val s = ServerSocket().apply { reuseAddress = true; bind(InetSocketAddress(PUERTO_IMPRESORA)) }
+                val s = ServerSocket().apply { reuseAddress = true; bind(InetSocketAddress(puerto)) }
                 srv = s
                 while (!s.isClosed) {
                     val cx = s.accept()
@@ -68,7 +70,7 @@ class ServidorImpresora(private val estado: Estado, private val capturas: File) 
         try {
             capturas.mkdirs()
             val marca = SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.US).format(Date())
-            File(capturas, "$marca.bin").writeBytes(data)
+            File(capturas, "$marca${if (barra) "_barra" else ""}.bin").writeBytes(data)
             // Conserva solo las últimas 300 capturas
             capturas.listFiles()?.sortedBy { it.name }?.dropLast(300)?.forEach { it.delete() }
         } catch (_: Exception) { }
@@ -84,7 +86,7 @@ class ServidorImpresora(private val estado: Estado, private val capturas: File) 
             else cuerpo.forEach { p.items.add(Item("", it)) }
             if (p.titulo == null) p.titulo = "Formato no reconocido: revisar"
         }
-        estado.nuevaComanda(p)
+        estado.nuevaComanda(p, barra)
     }
 }
 
@@ -148,6 +150,8 @@ class ServidorWeb(private val estado: Estado, private val pagina: String) {
             when {
                 metodo == "GET" && (ruta == "/" || ruta == "/cocina") ->
                     responder(out, 200, html, pagina.replace("__MODO__", "cocina").toByteArray())
+                metodo == "GET" && (ruta == "/barra" || ruta == "/cliente") ->
+                    responder(out, 200, html, pagina.replace("__MODO__", ruta.drop(1)).toByteArray())
                 metodo == "GET" && ruta == "/caja" ->
                     responder(out, 200, html, pagina.replace("__MODO__", "caja").toByteArray())
                 metodo == "GET" && ruta == "/tiempos" ->
@@ -180,7 +184,7 @@ class ServidorWeb(private val estado: Estado, private val pagina: String) {
                         if (d.isNull("nombre")) null else d.optString("nombre"),
                         if (d.has("verde")) d.optInt("verde") else null,
                         if (d.has("ambar")) d.optInt("ambar") else null,
-                        d.optString("url"), d.optString("clave"), d.optString("turno"))
+                        d.optString("url"), d.optString("clave"), d.optString("turno"), d.optString("estacion"))
                     responder(out, if (ok) 200 else 400, "application/json", "{\"ok\": $ok}".toByteArray())
                 }
                 else -> responder(out, 404, "text/plain; charset=utf-8", "No encontrado".toByteArray())

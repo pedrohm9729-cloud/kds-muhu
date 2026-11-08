@@ -16,12 +16,16 @@ class Comanda(
     val items: MutableList<Item>,
     var estado: String = "abierta",
     var recibida: Double, var actualizada: Double, var lista: Double? = null,
+    /** Hora en que cada estación terminó su parte: {"cocina": ts, "barra": ts} */
+    val listas: MutableMap<String, Double> = mutableMapOf(),
 )
 
 class Hist(
     val id: Int, val mesa: String?, val mozo: String?, val enc: String?,
     val entro: Double, val listo: Double, val min: Double, val prods: List<Pair<String, String>>,
     val turno: String = "AM",
+    /** Minutos de cocina y de barra (null si esa estación no tenía productos). */
+    val mc: Double? = null, val mb: Double? = null,
 )
 
 /** Turnos de Muhu. AM: 07:00 a 14:30 · PM: 14:30 a 23:00. */
@@ -39,25 +43,32 @@ class Estado(private val dir: File) {
     private val archEstado = File(dir, "kds_estado.json")
     val archHist = File(dir, "historial_comandas.csv")
     private val cols = listOf("id", "fecha", "mesa", "zona", "titulo", "encargado", "mozo",
-        "recibida", "lista", "minutos", "productos", "turno")
-    private val colsV1 = cols.dropLast(1)
+        "recibida", "lista", "minutos", "productos", "turno", "min_cocina", "min_barra")
+    private val colsV2 = cols.dropLast(2)
+    private val colsV1 = cols.dropLast(3)
 
     val comandas = mutableListOf<Comanda>()
     private val hist = mutableListOf<Hist>()
     private var seq = 0
-    private var ultimaDespachada: Int? = null
     var encargado: String? = null; private set
     private var turnoDesde: Double? = null
     var turno: String? = null; private set
-    /** Palabras que pintan de color un producto en la cocina: [{"p":"helado","c":"azul"}] */
+    /** Palabras que se pintan de color en la cocina: [{"p":"helado","c":"azul"}] */
     var palabras: JSONArray = JSONArray("""[{"p":"helado","c":"azul"},{"p":"frapp","c":"celeste"},{"p":"alergi","c":"rojo"}]"""); private set
+    /** Barra y cocina separadas. Si está apagado, todo va a cocina como antes. */
+    @Volatile var estaciones = false; private set
+    /** Productos que prepara la barra (inicio de palabra, sin tildes). */
+    var barraPal: JSONArray = JSONArray(listOf("cafe", "espresso", "americano", "capuccino", "cappuccino", "latte",
+        "flat white", "mocca", "macchiato", "cortado", "frapp", "jugo", "limonada", "te", "infusion",
+        "chocolate caliente", "smoothie", "batido", "gaseosa", "chicha", "emoliente")); private set
     var verde = 6; private set
     var ambar = 10; private set
     var ip: String = "-"
+    private var afecta: Set<String> = emptySet()
 
     val clientes = CopyOnWriteArrayList<LinkedBlockingQueue<String>>()
-    /** Aviso al servicio para sonar en la tablet aunque la pantalla se esté recargando. */
-    @Volatile var alEvento: ((String) -> Unit)? = null
+    /** Aviso al servicio para sonar en la tablet: (evento, estaciones afectadas). */
+    @Volatile var alEvento: ((String, Set<String>) -> Unit)? = null
 
     private val fFecha = SimpleDateFormat("yyyy-MM-dd", Locale.US)
     private val fHora = SimpleDateFormat("HH:mm:ss", Locale.US)
@@ -71,12 +82,35 @@ class Estado(private val dir: File) {
 
     private fun ahora() = System.currentTimeMillis() / 1000.0
 
+    // ------------------------------------------------------------- estaciones
+    private fun norm(s: String) = java.text.Normalizer.normalize(s, java.text.Normalizer.Form.NFD)
+        .replace(Regex("\\p{M}+"), "").lowercase(Locale.ROOT)
+
+    /** ¿A qué estación va un producto? Coincide al inicio de una palabra; las reglas cortas, palabra completa. */
+    fun estacionDe(producto: String): String {
+        if (!estaciones) return "cocina"
+        val n = norm(producto)
+        for (k in 0 until barraPal.length()) {
+            val r = norm(barraPal.optString(k)).trim()
+            if (r.isEmpty()) continue
+            val fin = if (r.length <= 3) "(?![\\p{L}\\p{N}])" else ""
+            if (Regex("(?<![\\p{L}\\p{N}])" + Regex.escape(r) + fin).containsMatchIn(n)) return "barra"
+        }
+        return "cocina"
+    }
+
+    /** Estaciones con productos vigentes en la comanda. */
+    private fun estacionesDe(c: Comanda): Set<String> {
+        val s = c.items.filter { !it.cancelado }.map { it.est }.toSet()
+        return if (s.isEmpty()) setOf("cocina") else s
+    }
+
     // ------------------------------------------------------------- JSON
     private fun Any?.j(): Any = this ?: JSONObject.NULL
 
     private fun itemJ(it: Item) = JSONObject().apply {
         put("cant", it.cant); put("producto", it.producto); put("mods", JSONArray(it.mods))
-        put("hecho", it.hecho); put("cancelado", it.cancelado); put("marca", it.marca.j())
+        put("hecho", it.hecho); put("cancelado", it.cancelado); put("marca", it.marca.j()); put("est", it.est)
     }
 
     private fun comandaJ(c: Comanda) = JSONObject().apply {
@@ -84,12 +118,14 @@ class Estado(private val dir: File) {
         put("mozo", c.mozo.j()); put("hora", c.hora.j()); put("estado", c.estado)
         put("items", JSONArray().apply { c.items.forEach { put(itemJ(it)) } })
         put("recibida_ts", c.recibida); put("actualizada_ts", c.actualizada); put("lista_ts", c.lista.j())
+        put("listas", JSONObject().apply { c.listas.forEach { (k, v) -> put(k, v) } })
     }
 
     private fun histJ(h: Hist) = JSONObject().apply {
         put("id", h.id); put("mesa", h.mesa.j()); put("mozo", h.mozo.j()); put("enc", h.enc.j())
         put("turno", h.turno)
         put("entro", h.entro); put("listo", h.listo); put("min", h.min)
+        put("mc", h.mc.j()); put("mb", h.mb.j())
         put("prods", JSONArray().apply { h.prods.forEach { put(JSONArray(listOf(it.first, it.second))) } })
     }
 
@@ -97,7 +133,7 @@ class Estado(private val dir: File) {
 
     private fun itemDe(o: JSONObject) = Item(o.optString("cant"), o.optString("producto"),
         MutableList(o.optJSONArray("mods")?.length() ?: 0) { o.getJSONArray("mods").getString(it) },
-        o.optBoolean("hecho"), o.optBoolean("cancelado"), o.str("marca"))
+        o.optBoolean("hecho"), o.optBoolean("cancelado"), o.str("marca"), o.optString("est", "cocina"))
 
     // -------------------------------------------------------- persistencia
     private fun cargar() {
@@ -109,14 +145,18 @@ class Estado(private val dir: File) {
             turno = d.optString("turno").takeIf { Turnos.valido(it) }
             verde = d.optInt("verde", 6); ambar = d.optInt("ambar", 10)
             d.optJSONArray("palabras")?.let { palabras = it }
+            estaciones = d.optBoolean("estaciones", false)
+            d.optJSONArray("barra")?.let { barraPal = it }
             val arr = d.optJSONArray("comandas") ?: JSONArray()
             for (k in 0 until arr.length()) {
                 val o = arr.getJSONObject(k)
                 val its = o.getJSONArray("items")
-                comandas.add(Comanda(o.getInt("id"), o.str("mesa"), o.str("zona"), o.str("titulo"),
+                val c = Comanda(o.getInt("id"), o.str("mesa"), o.str("zona"), o.str("titulo"),
                     o.str("mozo"), o.str("hora"), MutableList(its.length()) { itemDe(its.getJSONObject(it)) },
                     o.optString("estado", "abierta"), o.getDouble("recibida_ts"), o.getDouble("actualizada_ts"),
-                    if (o.isNull("lista_ts")) null else o.getDouble("lista_ts")))
+                    if (o.isNull("lista_ts")) null else o.getDouble("lista_ts"))
+                o.optJSONObject("listas")?.let { l -> l.keys().forEach { c.listas[it] = l.getDouble(it) } }
+                comandas.add(c)
             }
         } catch (_: Exception) { }
     }
@@ -127,6 +167,7 @@ class Estado(private val dir: File) {
                 put("seq", seq); put("encargado", encargado.j()); put("turno_desde", turnoDesde.j())
                 put("turno", turno.j())
                 put("verde", verde); put("ambar", ambar); put("palabras", palabras)
+                put("estaciones", estaciones); put("barra", barraPal)
                 put("comandas", JSONArray().apply { comandas.forEach { put(comandaJ(it)) } })
             }
             val tmp = File(dir, "kds_estado.json.tmp")
@@ -159,7 +200,8 @@ class Estado(private val dir: File) {
                 porId.remove(id)
                 val tu = r.getOrNull(11)?.takeIf { Turnos.valido(it) } ?: Turnos.de(r[7])
                 porId[id] = Hist(id, r[2].ifEmpty { null }, r[6].ifEmpty { null }, r[5].ifEmpty { null },
-                    ent, lis, r[9].toDoubleOrNull() ?: 0.0, prods, tu)
+                    ent, lis, r[9].toDoubleOrNull() ?: 0.0, prods, tu,
+                    r.getOrNull(12)?.toDoubleOrNull(), r.getOrNull(13)?.toDoubleOrNull())
             }
         } catch (_: Exception) { }
         return porId.values.toList()
@@ -169,12 +211,14 @@ class Estado(private val dir: File) {
         try {
             if (!archHist.exists()) return
             val cab = archHist.bufferedReader(Charsets.UTF_8).use { it.readLine() } ?: return
-            val c0 = cab.trimStart('\uFEFF').split(";")
-            if (c0 == colsV1) {
-                // Versión anterior sin columna de turno: se agrega según la hora de entrada
-                val filas = archHist.readLines(Charsets.UTF_8).drop(1).filter { it.isNotBlank() }
-                    .map { l -> val r = l.split(";"); l + ";" + (if (r.size > 7) Turnos.de(r[7]) else "AM") }
-                archHist.writeText("\uFEFF" + cols.joinToString(";") + "\n" +
+            val c0 = cab.trimStart('﻿').split(";")
+            if (c0 == colsV1 || c0 == colsV2) {
+                // Versiones anteriores: se agrega el turno (según la hora de entrada) y las columnas de estación
+                val filas = archHist.readLines(Charsets.UTF_8).drop(1).filter { it.isNotBlank() }.map { l ->
+                    val r = l.split(";")
+                    if (c0 == colsV1) l + ";" + (if (r.size > 7) Turnos.de(r[7]) else "AM") + ";;" else "$l;;"
+                }
+                archHist.writeText("﻿" + cols.joinToString(";") + "\n" +
                     filas.joinToString("") { it + "\n" }, Charsets.UTF_8)
             } else if (c0 != cols) {
                 archHist.renameTo(File(dir, "historial_anterior.csv")); return
@@ -184,21 +228,24 @@ class Estado(private val dir: File) {
     }
 
     private fun csv(s: String?) = (s ?: "").replace(";", ",").replace("\n", " ")
+    private fun f1(x: Double?) = if (x == null) "" else String.format(Locale.US, "%.1f", x)
 
     private fun registrarHist(c: Comanda) {
         val lista = c.lista ?: return
         val prods = c.items.filter { !it.cancelado }.map { it.cant to it.producto }
         val mins = (lista - c.recibida) / 60
+        val sts = estacionesDe(c)
+        val mc = if ("cocina" in sts) ((c.listas["cocina"] ?: lista) - c.recibida) / 60 else null
+        val mb = if ("barra" in sts) ((c.listas["barra"] ?: lista) - c.recibida) / 60 else null
         val tu = turno ?: Turnos.de(hhmmss(c.recibida))
-        hist.add(Hist(c.id, c.mesa, c.mozo, encargado, c.recibida, lista, mins, prods, tu))
+        hist.add(Hist(c.id, c.mesa, c.mozo, encargado, c.recibida, lista, mins, prods, tu, mc, mb))
         sync.encolar(sync.fila(c.id, fecha(c.recibida), c.mesa, c.zona, c.titulo, encargado, c.mozo,
-            hhmmss(c.recibida), hhmmss(lista), mins, prods, tu))
+            hhmmss(c.recibida), hhmmss(lista), mins, prods, tu, mc, mb))
         try {
             val nuevo = !archHist.exists()
             val linea = listOf(c.id.toString(), fecha(c.recibida), csv(c.mesa), csv(c.zona), csv(c.titulo),
-                csv(encargado), csv(c.mozo), hhmmss(c.recibida), hhmmss(lista),
-                String.format(Locale.US, "%.1f", mins),
-                csv(prods.joinToString(" | ") { "${it.first} ${it.second}" }), tu).joinToString(";")
+                csv(encargado), csv(c.mozo), hhmmss(c.recibida), hhmmss(lista), f1(mins),
+                csv(prods.joinToString(" | ") { "${it.first} ${it.second}" }), tu, f1(mc), f1(mb)).joinToString(";")
             archHist.appendText((if (nuevo) "﻿" + cols.joinToString(";") + "\n" else "") + linea + "\n")
         } catch (_: Exception) { }
     }
@@ -210,7 +257,8 @@ class Estado(private val dir: File) {
         }.timeInMillis / 1000.0
         JSONObject().apply {
             put("evento", evento); put("ahora", ahora()); put("verde", verde); put("ambar", ambar)
-            put("palabras", palabras)
+            put("afecta", JSONArray(afecta.toList()))
+            put("palabras", palabras); put("estaciones", estaciones); put("barra", barraPal)
             put("encargado", encargado.j()); put("turno_desde", turnoDesde.j()); put("ip", ip)
             put("turno", turno.j())
             put("turnos", JSONObject().apply {
@@ -225,16 +273,33 @@ class Estado(private val dir: File) {
         }.toString()
     }
 
-    private fun cambio(evento: String) {
+    private fun cambio(evento: String, af: Set<String> = emptySet()) {
+        afecta = af
         guardar()
         val msg = snapshot(evento)
         clientes.forEach { it.offer(msg) }
-        try { alEvento?.invoke(evento) } catch (_: Exception) { }
+        try { alEvento?.invoke(evento, af) } catch (_: Exception) { }
     }
 
     // --------------------------------------------------------------- lógica
-    fun nuevaComanda(p: Parseada): Int = synchronized(lock) {
+    /** Si todas las estaciones de la comanda terminaron, queda lista. */
+    private fun revisarLista(c: Comanda): Boolean {
+        if (c.estado != "abierta") return false
+        val sts = estacionesDe(c)
+        if (c.items.none { !it.cancelado } || !sts.all { it in c.listas }) return false
+        c.estado = "lista"; c.lista = sts.mapNotNull { c.listas[it] }.maxOrNull() ?: ahora()
+        registrarHist(c)
+        return true
+    }
+
+    /**
+     * Nueva comanda. [desdeBarra] = llegó por la impresora "Barra" (puerto 9101): todo va a barra.
+     * Si no, cada producto va a la estación que indique la lista de productos de barra.
+     */
+    fun nuevaComanda(p: Parseada, desdeBarra: Boolean = false): Int = synchronized(lock) {
         val t = ahora()
+        (p.items + p.cancelados).forEach { it.est = if (estaciones && desdeBarra) "barra" else estacionDe(it.producto) }
+        val af = (p.items + p.cancelados).map { it.est }.toSet()
         val abierta = if (p.mesa != null) comandas.firstOrNull {
             it.estado == "abierta" && it.mesa == p.mesa && it.zona == p.zona
         } else null
@@ -245,10 +310,16 @@ class Estado(private val dir: File) {
                 if (obj != null) obj.cancelado = true
                 else abierta.items.add(cx.also { it.cancelado = true })
             }
-            val marca = if (p.cancelados.isNotEmpty()) "cambio" else "nuevo"
+            // Wally manda un ticket por impresora: la parte de la otra estación que llega enseguida no es un cambio
+            val previas = abierta.items.filter { !it.cancelado && it !in p.items }.map { it.est }.toSet()
+            val parte = p.cancelados.isEmpty() && p.items.isNotEmpty() && p.items.none { it.est in previas } &&
+                t - abierta.recibida < 120
+            val marca = if (parte) null else if (p.cancelados.isNotEmpty()) "cambio" else "nuevo"
             p.items.forEach { abierta.items.add(it.also { i -> i.marca = marca }) }
+            p.items.forEach { abierta.listas.remove(it.est) }          // esa estación vuelve a tener trabajo
             abierta.actualizada = t
-            cambio(if (p.cancelados.isNotEmpty() && p.items.isEmpty()) "anulacion" else "cambio")
+            if (revisarLista(abierta)) { cambio("listo", af); return abierta.id }
+            cambio(if (parte) "nueva" else if (p.cancelados.isNotEmpty() && p.items.isEmpty()) "anulacion" else "cambio", af)
             return abierta.id
         }
         seq += 1
@@ -256,14 +327,17 @@ class Estado(private val dir: File) {
             (p.items + p.cancelados.onEach { it.cancelado = true }).toMutableList(),
             recibida = t, actualizada = t)
         comandas.add(c)
-        cambio(if (p.items.isNotEmpty()) "nueva" else "anulacion")
+        cambio(if (p.items.isNotEmpty()) "nueva" else "anulacion", af)
         c.id
     }
 
     fun accion(a: String, id: Int?, idx: Int?, nombre: String?, v: Int?, am: Int?,
-               url: String? = null, clave: String? = null, turnoSel: String? = null): Boolean = synchronized(lock) {
+               url: String? = null, clave: String? = null, turnoSel: String? = null,
+               est: String? = null): Boolean = synchronized(lock) {
         val c = comandas.firstOrNull { it.id == id }
-        val evento: String
+        val e = est?.takeIf { estaciones && (it == "cocina" || it == "barra") }
+        var evento: String
+        var af: Set<String> = emptySet()
         when {
             a == "turno" -> {
                 val n = (nombre ?: "").replace(Regex("\\s+"), " ").trim().take(24)
@@ -288,6 +362,23 @@ class Estado(private val dir: File) {
                 }
                 palabras = limpio; evento = "estado"
             }
+            a == "estaciones" -> {
+                if (v != null) estaciones = v == 1
+                if (!url.isNullOrBlank()) {
+                    val arr = try { JSONArray(url) } catch (_: Exception) { return false }
+                    val limpio = JSONArray()
+                    for (k in 0 until minOf(arr.length(), 80)) {
+                        val s = arr.optString(k).trim().take(30); if (s.isNotEmpty()) limpio.put(s)
+                    }
+                    barraPal = limpio
+                }
+                // Reclasifica lo que está abierto en pantalla
+                comandas.filter { it.estado == "abierta" }.forEach { c2 ->
+                    c2.items.forEach { it.est = estacionDe(it.producto) }
+                    c2.listas.keys.retainAll(estacionesDe(c2)); revisarLista(c2)
+                }
+                evento = "estado"
+            }
             a == "config" -> {
                 val nv = v ?: return false; val na = am ?: return false
                 if (nv < 1 || na <= nv || na > 120) return false
@@ -297,24 +388,30 @@ class Estado(private val dir: File) {
                 c.items[idx].hecho = !c.items[idx].hecho; evento = "estado"
             }
             a == "listo" && c != null && c.estado == "abierta" -> {
-                c.estado = "lista"; c.lista = ahora(); ultimaDespachada = c.id
-                registrarHist(c); evento = "listo"
+                val sts = estacionesDe(c)
+                if (e == null || e !in sts) sts.forEach { c.listas.putIfAbsent(it, ahora()) }
+                else c.listas[e] = ahora()
+                af = if (e != null) setOf(e) else sts
+                evento = if (revisarLista(c)) "listo" else "estacion"
             }
             a == "entregado" && c != null -> { comandas.remove(c); evento = "estado" }
-            a == "recuperar" && ultimaDespachada != null -> {
-                val u = comandas.firstOrNull { it.id == ultimaDespachada }
-                if (u != null && u.estado == "lista") {
+            a == "recuperar" -> {
+                val u = if (e == null) comandas.filter { it.estado == "lista" }.maxByOrNull { it.lista ?: 0.0 }
+                        else comandas.filter { e in it.listas }.maxByOrNull { it.listas[e] ?: 0.0 }
+                if (u == null) return false
+                if (e == null) u.listas.clear() else u.listas.remove(e)
+                if (u.estado == "lista") {
                     u.estado = "abierta"; u.lista = null
                     hist.removeAll { it.id == u.id }
                 }
-                ultimaDespachada = null; evento = "estado"
+                evento = "estado"
             }
             else -> return false
         }
         // Las despachadas hace más de 30 min salen de pantalla
         val lim = ahora() - 1800
         comandas.removeAll { it.estado == "lista" && (it.lista ?: 0.0) < lim }
-        cambio(evento)
+        cambio(evento, af)
         true
     }
 }

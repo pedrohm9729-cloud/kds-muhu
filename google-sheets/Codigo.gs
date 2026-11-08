@@ -1,7 +1,8 @@
 /**
  * KDS Muhu → Google Sheets
  * Recibe las comandas despachadas desde la tablet del KDS y las guarda en las
- * pestañas "Comandas" y "Productos", con su turno (AM 07:00–14:30, PM 14:30–23:00). Si una comanda llega dos veces, se actualiza
+ * pestañas "Comandas" y "Productos", con su turno (AM 07:00–14:30, PM 14:30–23:00)
+ * y el tiempo de cocina y de barra. Si una comanda llega dos veces, se actualiza
  * (no se duplica).
  *
  * Instalación: Extensiones → Apps Script → pegar este código → Implementar →
@@ -39,9 +40,10 @@ function doPost(e) {
       const turno = (r.turno === 'AM' || r.turno === 'PM') ? r.turno : (String(r.entro) < '14:30' ? 'AM' : 'PM');
       const fila = [r.id, dia, r.mesa || '', r.zona || '', r.titulo || '', r.encargado || '', r.mozo || '',
         fecha(r.fecha, r.entro), fecha(r.fecha, r.listo), Number(r.minutos),
-        prods.map(p => p[0] + ' ' + p[1]).join(' | '), clave, turno];
+        prods.map(p => p[0] + ' ' + p[1]).join(' | '), clave, turno,
+        r.min_cocina == null ? '' : Number(r.min_cocina), r.min_barra == null ? '' : Number(r.min_barra)];
       if (filaDeClave[clave]) {
-        hojaC.getRange(filaDeClave[clave], 1, 1, 13).setValues([fila]);
+        hojaC.getRange(filaDeClave[clave], 1, 1, 15).setValues([fila]);
         actualizadas++;
         return;
       }
@@ -50,7 +52,7 @@ function doPost(e) {
       prods.forEach(p => nuevasP.push([dia, r.id, p[1], Number(String(p[0]).replace(',', '.')) || 1, Number(r.minutos), clave, turno]));
     });
 
-    if (nuevasC.length) hojaC.getRange(hojaC.getLastRow() + 1, 1, nuevasC.length, 13).setValues(nuevasC);
+    if (nuevasC.length) hojaC.getRange(hojaC.getLastRow() + 1, 1, nuevasC.length, 15).setValues(nuevasC);
     if (nuevasP.length) hojaP.getRange(hojaP.getLastRow() + 1, 1, nuevasP.length, 7).setValues(nuevasP);
     return salida({ ok: true, nuevas: nuevasC.length, actualizadas: actualizadas });
   } finally {

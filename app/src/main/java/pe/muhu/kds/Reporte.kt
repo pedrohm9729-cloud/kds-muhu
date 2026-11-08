@@ -223,6 +223,15 @@ object Reporte {
                 ts.map { (_, v) -> color(v.map { it.min }.average()) })
         }
 
+        // ---------------------------------------------------------------- por estación
+        if (hist.any { it.mb != null }) {
+            titulo(h, "Por estación", "Tiempo de cada estación desde que entró la comanda hasta que marcó su parte lista")
+            val es = listOf("Cocina" to hist.mapNotNull { it.mc }, "Barra" to hist.mapNotNull { it.mb }).filter { it.second.isNotEmpty() }
+            tabla(h, listOf(Col("Estación", 235f), Col("Comandas", 80f, true), Col("Promedio", 100f, true), Col("Fuera de tiempo", 100f, true)),
+                es.map { (k, v) -> listOf(k, v.size.toString(), mmss(v.average()), "${v.count { it >= ambar } * 100 / v.size}%") },
+                es.map { color(it.second.average()) })
+        }
+
         // ---------------------------------------------------------------- encargados
         val porEnc = hist.groupBy { it.enc ?: "Sin turno" }
         if (porEnc.size >= 1) {

@@ -23,6 +23,7 @@ class KdsService : Service() {
     companion object {
         @Volatile var estado: Estado? = null
         private var impresora: ServidorImpresora? = null
+        private var impresoraBarra: ServidorImpresora? = null
         private var web: ServidorWeb? = null
 
         fun iniciar(ctx: Context) {
@@ -59,11 +60,13 @@ class KdsService : Service() {
         if (estado == null) {
             val e = Estado(filesDir)
             e.ip = ipLocal()
-            e.alEvento = { ev -> Sonido.sonar(this, ev) }
+            // La tablet está en cocina: con estaciones separadas, no suena por pedidos que son solo de barra
+            e.alEvento = { ev, af -> if (!e.estaciones || af.isEmpty() || "cocina" in af) Sonido.sonar(this, ev) }
             e.sync.iniciar()
             estado = e
             val pagina = assets.open("kds.html").bufferedReader(Charsets.UTF_8).readText()
             impresora = ServidorImpresora(e, File(filesDir, "capturas")).also { it.iniciar() }
+            impresoraBarra = ServidorImpresora(e, File(filesDir, "capturas"), PUERTO_BARRA, barra = true).also { it.iniciar() }
             web = ServidorWeb(e, pagina).also { it.iniciar() }
             // La IP puede cambiar si el WiFi se reconecta
             thread(isDaemon = true) {
