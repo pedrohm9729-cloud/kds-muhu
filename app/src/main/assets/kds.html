@@ -58,11 +58,11 @@ li.cancel .p,li.cancel .m{text-decoration:line-through;color:#ff9a95}
 .tag.cambio{background:var(--resalta);color:#1a1410}.tag.nuevo{background:var(--azul);color:#fff}.tag.anul{background:var(--rojo);color:#fff}
 .acc{padding:0 10px 12px;display:flex}
 .pw{font-weight:800}li.cancel .pw{color:inherit!important}
-.banda{font:800 24px/1 var(--f-disp);letter-spacing:2px;text-align:center;padding:9px 8px}
-.banda.llevar{background:#f3eee6;color:#14120f}
-.banda.rappi{background:repeating-linear-gradient(-45deg,#ff441f 0 14px,#d63516 14px 28px);color:#fff;text-shadow:0 1px 2px #0006}
-.card.rappi{border:3px solid #ff441f!important}
-.card.llevar .p{font-size:24px}.card.llevar .m{font-size:18px}.card.llevar .mesa{font-size:31px}
+.et{font:800 15px/1 var(--f-disp);letter-spacing:1px;padding:4px 8px 3px;border-radius:6px;margin-left:8px;vertical-align:4px;display:inline-block;background:#f3eee6;color:#14120f}
+.et.rappi{background:#14120f;color:#ff6a47;box-shadow:inset 0 0 0 2px #ff6a47}
+#menu{position:fixed;top:60px;right:16px;z-index:25;background:var(--rail);border:1px solid var(--linea);border-radius:14px;padding:8px;display:flex;flex-direction:column;gap:4px;min-width:230px;box-shadow:0 10px 30px #0009}
+#menu button{background:none;text-align:left;padding:11px 12px;font-weight:600;font-size:16px}#menu button:hover{background:var(--ticket)}
+#menu .info{color:var(--sub);font-size:13px;padding:6px 12px 4px;border-top:1px solid var(--linea);margin-top:4px}#menu .info b{font-family:var(--f-num);color:var(--txt)}
 #vista{zoom:var(--zoom,1)}
 .tablero.cols{grid-template-columns:repeat(var(--cols),minmax(0,1fr))}
 .compacto .meta{display:none}.compacto li{padding:5px 8px}.compacto .card .top{padding:7px 12px}
@@ -145,17 +145,19 @@ h3{font:800 16px var(--f-disp);letter-spacing:1.4px;text-transform:uppercase;col
  <button class="b" id="cerrarV">Listo</button>
 </div>
 <button class="b" id="btnVistaC" hidden title="Letra y diseño">⚙</button>
+<div id="menu" hidden>
+ <button id="btnRec">↩ Recuperar última comanda</button>
+ <button id="btnVista">Aa · Letra y diseño</button>
+ <button id="btnTotal"></button>
+ <button id="btnRecargar">⟳ Recargar pantalla</button>
+ <div class="info">Wally → <b id="ipw">–</b> · Abiertas <b id="nAb">0</b> · Promedio hoy <b id="prom">–</b></div>
+</div>
 <header><div class="wrap"><div class="barra">
   <div class="marca"><span id="conexion" title="Conexión con el servidor"></span><span class="logo"><b>MUHU</b><i>KDS</i></span></div>
-  <nav><a href="#cocina" data-v="cocina">Cocina</a><a href="#barra" data-v="barra" id="navBarra" hidden>Barra</a><a href="#caja" data-v="caja">Caja</a><a href="#tiempos" data-v="tiempos">Tiempos</a></nav>
+  <nav><a href="#cocina" data-v="cocina">Cocina</a><a href="#barra" data-v="barra" id="navBarra" hidden>Barra</a><a href="#caja" data-v="caja">Caja</a><a href="#tiempos" data-v="tiempos">Tiempos</a><a href="#ajustes" data-v="ajustes" title="Ajustes">⚙</a></nav>
   <span class="esp"></span>
   <button class="chip enc" id="btnTurno" title="Cambiar de encargado">👤 <b id="encNom">–</b> · <b id="encTurno">–</b> · desde <b id="encDesde">–</b> · <span id="encAcc">Cambiar turno</span></button>
-  <span class="chip oc" title="Configura esta IP en Wally como impresora BIENEX E802">Wally → <b id="ipw">–</b></span>
-  <span class="chip">Abiertas <b id="nAb">0</b></span>
-  <span class="chip oc">Promedio hoy <b id="prom">–</b></span>
-  <button class="b" id="btnRec" title="Devuelve a pantalla la última comanda marcada como lista">↩ Recuperar última</button>
-  <button class="b" id="btnVista" title="Tamaño de letra y diseño">Aa</button>
-  <button class="b oc" id="btnRecargar" title="Recargar pantalla">⟳</button>
+  <button class="b" id="btnMenu" title="Más opciones" style="font-size:20px;padding:4px 14px">⋯</button>
 </div></div></header>
 <main class="wrap"><div id="vista"></div></main>
 <script>
@@ -168,7 +170,7 @@ const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&g
 const mmss=seg=>{seg=Math.max(0,Math.floor(seg));return String(Math.floor(seg/60)).padStart(2,"0")+":"+String(seg%60).padStart(2,"0")};
 const hhmm=t=>new Date(t*1000).toLocaleTimeString("es-PE",{hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false});
 const semaf=m=>m<est.verde?"v":m<est.ambar?"a":"r", cls=m=>({v:"cv",a:"ca",r:"cr"})[semaf(m)];
-let pref={zoom:1,cols:0,todo:true,compacto:false,soloLlevar:false};
+let pref={zoom:1,cols:0,total:false,compacto:false,soloLlevar:false};
 try{Object.assign(pref,JSON.parse(localStorage.getItem("kds_pref")||"{}"))}catch(e){}
 function guardarPref(){try{localStorage.setItem("kds_pref",JSON.stringify(pref))}catch(e){}document.documentElement.style.setProperty("--zoom",pref.zoom);pintarPanel();pintar()}
 function pintarPanel(){
@@ -176,7 +178,7 @@ function pintarPanel(){
  $("opZoom").innerHTML=op([[0.85,"Pequeña"],[1,"Normal"],[1.15,"Grande"],[1.3,"Muy grande"],[1.5,"Enorme"]],"zoom");
  $("opCols").innerHTML=op([[0,"Auto"],[1,"1"],[2,"2"],[3,"3"],[4,"4"],[5,"5"],[6,"6"]],"cols");
  const tg=(k,t)=>`<button data-k="${k}" data-v="tg" class="${pref[k]?"on":""}">${pref[k]?"✓ ":""}${t}</button>`;
- $("opOtros").innerHTML=vista==="cliente"?tg("soloLlevar","Solo para llevar y Rappi"):tg("todo","Todo el día")+tg("compacto","Modo compacto")}
+ $("opOtros").innerHTML=vista==="cliente"?tg("soloLlevar","Solo para llevar y Rappi"):tg("total","Total por preparar")+tg("compacto","Modo compacto")}
 function post(accion,extra){return fetch("/accion",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({accion,...extra})})}
 function bip(t){if(window.Android&&vista==="cocina")return; /* en la tablet suena el sonido nativo */ if(!ctx)return;if(ctx.state==="suspended")ctx.resume();const N={nueva:[880,1175],listo:[660,880,1320],anulacion:[440,330,440],cambio:[988,988]}[t]||[700];
  let s=ctx.currentTime;for(const f of N){const o=ctx.createOscillator(),g=ctx.createGain();o.type="square";o.frequency.value=f;
@@ -212,21 +214,20 @@ function tarjeta(c,modo){
  let acc="",extra="";
  if(prep&&abierta)acc=`<div class="acc"><button class="listo" data-a="listo" data-id="${c.id}"${st?` data-est="${st}"`:""}>✓ LISTO</button></div>`;
  if(modo==="caja"&&c.estado==="lista")acc=`<div class="acc"><button class="entregado" data-a="entregado" data-id="${c.id}">ENTREGADO</button></div>`;
- if(st)for(const o of estsDe(c).filter(x=>x!==st)){const n=c.items.filter(i=>!i.cancelado&&(i.est||"cocina")===o).length;
-  extra+=`<div class="otra${L[o]?" ok":""}">${EST[o]}: ${n} producto(s) · ${L[o]?"✓ lista":"en preparación"}</div>`}
  if(modo==="caja"&&est.estaciones)extra=`<div class="ests">${estsDe(c).map(s=>`<span class="es${L[s]?" ok":""}">${EST[s]} ${L[s]?"✓ "+mmss(L[s]-c.recibida_ts):"⏳"}</span>`).join("")}</div>`;
  const reloj=!abierta?"LISTO "+mmss(fin-c.recibida_ts):mmss(t-c.recibida_ts);
  const todo=norm([c.mesa,c.zona,c.titulo,...c.items.flatMap(i=>[i.producto,...(i.mods||[])])].join(" "));
- const llevar=todo.includes("llevar"),rappi=todo.includes("rappi");
- const bandas=(rappi?'<div class="banda rappi">🛵 RAPPI</div>':"")+(llevar?'<div class="banda llevar">🥡 PARA LLEVAR</div>':"");
- return `<div class="card ${col}${llevar?" llevar":""}${rappi?" rappi":""}${flash.has(c.id)?" flash":""}"><div class="top"><span class="mesa">${c.mesa?"Mesa "+esc(c.mesa):"Pedido #"+c.id}${c.zona?` <small>· ${esc(c.zona)}</small>`:""}</span><span class="reloj">${reloj}</span></div>${bandas}${modo==="caja"?extra:""}
- ${c.titulo?`<div class="titulo">📝 ${esc(c.titulo)}</div>`:""}<div class="meta">${esc(c.mozo||"")} · <b>${hhmm(c.recibida_ts)}</b></div><ul>${items}</ul>${modo!=="caja"?extra:""}${acc}</div>`}
+ const rappi=todo.includes("rappi"),llevar=!rappi&&todo.includes("llevar");
+ const et=rappi?'<span class="et rappi">RAPPI</span>':llevar?'<span class="et">LLEVAR</span>':"";
+ const nom=c.mesa&&c.mesa!=="0"?"Mesa "+esc(c.mesa):"Pedido #"+c.id,caja=modo==="caja";
+ return `<div class="card ${col}${flash.has(c.id)?" flash":""}"><div class="top"><span class="mesa">${nom}${et}${caja&&c.zona&&!et?` <small>· ${esc(c.zona)}</small>`:""}</span><span class="reloj">${reloj}</span></div>${caja?extra:""}
+ ${c.titulo?`<div class="titulo">📝 ${esc(c.titulo)}</div>`:""}${caja?`<div class="meta">${esc(c.mozo||"")} · <b>${hhmm(c.recibida_ts).slice(0,5)}</b></div>`:""}<ul>${items}</ul>${acc}</div>`}
 
 function todoDia(ab,st){const g=new Map();
  for(const c of ab)for(const it of c.items){if(it.cancelado||it.hecho||(st&&(it.est||"cocina")!==st))continue;
   const k=norm(it.producto).trim();if(!g.has(k))g.set(k,[it.producto,0]);g.get(k)[1]+=parseFloat(String(it.cant).replace(",","."))||1}
  const L=[...g.values()].sort((a,b)=>b[1]-a[1]);if(!L.length)return"";
- return `<div class="todo"><h3>Todo el día</h3>${L.map(([p,n])=>`<span class="td"><b>${Math.round(n*10)/10}</b>${pal(p)}</span>`).join("")}</div>`}
+ return `<div class="todo"><h3>Total por preparar</h3>${L.map(([p,n])=>`<span class="td"><b>${Math.round(n*10)/10}</b>${pal(p)}</span>`).join("")}</div>`}
 function vTablero(modo){
  if(modo==="barra"&&!est.estaciones)return `<div class="vacio">La barra está apagada. Actívala en <b>Tiempos → Barra y cocina</b>.</div>`;
  const st=deEst(modo),prep=modo==="cocina"||modo==="barra";
@@ -238,7 +239,7 @@ function vTablero(modo){
  if(modo==="caja"&&li.length)h+=`<div class="sec">🔔 Listo para entregar</div>${li.map(c=>tarjeta(c,modo)).join("")}<div class="sec">En preparación</div>`;
  h+=ab.length?ab.map(c=>tarjeta(c,modo)).join(""):`<div class="vacio">Sin comandas pendientes</div>`;
  if(prep&&li.length)h+=`<div class="sec">Despachadas recientes</div>${li.slice(0,4).map(c=>tarjeta(c,modo)).join("")}`;
- return (prep&&pref.todo?todoDia(ab,st):"")+`<div class="tablero ${modo}${pref.cols?" cols":""}" style="--cols:${pref.cols||1}">${h}</div>`}
+ return (prep&&pref.total?todoDia(ab,st):"")+`<div class="tablero ${modo}${pref.cols?" cols":""}" style="--cols:${pref.cols||1}">${h}</div>`}
 let cliVistos=new Map(),cliListo=false;
 function vCliente(){
  const sel=c=>!pref.soloLlevar||esLlevar(c);
@@ -268,7 +269,7 @@ function vTiempos(){
   <div class="k"><small>Más rápida</small><b>${m.length?mmss(Math.min(...m)*60):"–"}</b></div>
   <div class="k"><small>Más lenta</small><b>${m.length?mmss(Math.max(...m)*60):"–"}</b></div>
   <div class="k"><small>Fuera de tiempo (≥${est.ambar} min)</small><b class="cr">${m.filter(x=>x>=est.ambar).length}</b></div></div>`;
- if(!H.length)return kp+ajustes()+`<div class="vacio">Aún no hay comandas despachadas ${fT==="Todos"?"hoy":"en el turno "+fT}.</div>`;
+ if(!H.length)return kp+reporteHtml()+`<div class="vacio">Aún no hay comandas despachadas ${fT==="Todos"?"hoy":"en el turno "+fT}.</div>`;
  const porT=fT!=="Todos"?"":(()=>{const ts=["AM","PM"].map(t=>[t,H.filter(h=>(h.turno||turnoDeHora(hhmm(h.entro)))===t)]).filter(x=>x[1].length);
   if(ts.length<2)return"";return `<h3>Por turno</h3><div class="tbl" style="margin-bottom:18px"><table><tr><th>Turno</th><th>Comandas</th><th>Promedio</th><th>Fuera de tiempo</th><th>Encargados</th></tr>${ts.map(([t,v])=>{const pm=v.reduce((a,x)=>a+x.min,0)/v.length;
   return `<tr><td><b>${t}</b></td><td class="n">${v.length}</td><td class="n ${cls(pm)}"><b>${mmss(pm*60)}</b></td><td class="n">${Math.round(v.filter(x=>x.min>=est.ambar).length*100/v.length)}%</td><td>${esc([...new Set(v.map(x=>x.enc).filter(Boolean))].join(", "))}</td></tr>`}).join("")}</table></div>`})();
@@ -281,7 +282,7 @@ function vTiempos(){
  const tEnc=`<h3>Por encargado (del más rápido al más lento)</h3><div class="tbl" style="margin-bottom:18px"><table><tr><th>Encargado</th><th>Comandas</th><th>Productos</th><th>Promedio</th><th>Fuera de tiempo</th></tr>
  ${enc.map(([k,n,pr,pm,f],i)=>`<tr><td>${i===0&&enc.length>1?"🏆 ":""}<b>${esc(k)}</b>${k===est.encargado?" <span style='color:var(--azul);font-weight:700;font-size:13px'>· en turno</span>":""}</td><td class="n">${n}</td><td class="n">${pr}</td><td class="n ${cls(pm)}"><b>${mmss(pm*60)}</b></td><td class="n ${f>0?"cr":""}">${Math.round(f*100)}%</td></tr>`).join("")}</table></div>`;
  const det=[...H].reverse().map(h=>`<tr><td class="n">#${h.id}</td><td class="n">${esc(h.mesa||"—")}</td><td>${esc(h.turno||"")}</td><td><b>${esc(h.enc||"—")}</b></td><td>${esc(h.mozo||"")}</td><td class="n">${hhmm(h.entro)}</td><td class="n">${hhmm(h.listo)}</td><td class="n ${cls(h.min)}"><b>${mmss(h.min*60)}</b></td><td class="prods">${h.prods.map(([c,q])=>esc(c)+" "+esc(q)).join(" · ")}</td></tr>`).join("");
- return kp+porT+pE+tEnc+ajustes()+`<div class="grid2">${tabla("Por producto","Producto",agrupar(h=>h.prods.map(x=>x[1])))}${tabla("Por mozo","Mozo",agrupar(h=>[h.mozo||"—"]))}</div>
+ return kp+porT+pE+tEnc+reporteHtml()+`<div class="grid2">${tabla("Por producto","Producto",agrupar(h=>h.prods.map(x=>x[1])))}${tabla("Por mozo","Mozo",agrupar(h=>[h.mozo||"—"]))}</div>
  <h3>Detalle por comanda</h3><div class="tbl"><table><tr><th>#</th><th>Mesa</th><th>Turno</th><th>Encargado</th><th>Mozo</th><th>Entró</th><th>Listo</th><th>Tiempo</th><th>Productos</th></tr>${det}</table></div>`}
 
 let repF=null,repT="",sUrl="",sClave="";
@@ -297,46 +298,44 @@ let palEd=null;const palE=()=>palEd||(palEd=JSON.parse(JSON.stringify(est.palabr
 function palHtml(){const L=palEd||est.palabras||[];
  return `<h3>Palabras de color</h3><div class="aj"><div id="palL">${L.map((r,i)=>`<div class="palF"><input data-pi="${i}" value="${esc(r.p)}" placeholder="palabra"><select data-pc="${i}">${Object.keys(COLORES).map(k=>`<option ${r.c===k?"selected":""}>${k}</option>`).join("")}</select><span class="palM" style="background:${COLORES[r.c]||"#888"}"></span><button class="b" data-pdel="${i}">✕</button></div>`).join("")}</div>
  <button class="b" id="palAdd">＋ Agregar palabra</button><button class="b" id="palOk">Guardar palabras</button>
- <span class="sub">Si el producto o su nota contiene la palabra, se pinta de ese color en cocina. No importan mayúsculas ni tildes: "frapp" sirve para frappé y frappuccino. <b>Para llevar</b> y <b>Rappi</b> se detectan solos.</span></div>`}
+ <span class="sub">La palabra se pinta de ese color en cocina y barra. "frapp" sirve para frappé y frappuccino.</span></div>`}
 let barraEd=null;
 function estacHtml(){const ip=esc(est.ip||"IP");
  return `<h3>Barra y cocina</h3><div class="aj"><div class="filtroT" style="margin:0"><button data-estac="0" class="${!est.estaciones?"on":""}">Todo en cocina</button><button data-estac="1" class="${est.estaciones?"on":""}">Separar barra y cocina</button></div>
  ${est.estaciones?`<label style="flex-basis:100%">Productos que van a barra (separados por coma)<textarea id="barraTxt">${esc(barraEd??(est.barra||[]).join(", "))}</textarea></label><button class="b" id="barraOk">Guardar productos de barra</button>`:""}
- <span class="sub">Cada estación ve solo lo suyo y marca su parte. En <b>Caja</b> la comanda pasa a <b>Listo para entregar</b> cuando las dos terminan.
- Pantalla de barra: abre <code>http://${ip}:8080/barra</code> en un celular o tablet de la barra.
- Un producto va a barra si empieza con alguna de estas palabras (sin importar tildes); lo demás va a cocina.
- Opcional: si en Wally mandas las bebidas a otra impresora, créala con la IP <code>${ip}</code> y puerto <code>9101</code>: todo lo que llegue ahí va a barra.</span></div>
- <h3>Pantalla para clientes</h3><div class="aj"><span class="sub" style="margin:0">Abre <code>http://${ip}:8080/cliente</code> en un TV o tablet a la vista del público. Muestra <b>Preparando</b> y <b>¡Listo!</b> con sonido.
- El nombre que sale es la nota o título que la caja escribe en Wally (por ejemplo el nombre del cliente); si no hay, la mesa o el número de pedido. Con ⚙ puedes mostrar solo Para llevar y Rappi.</span></div>`}
-function ajustes(){const and=!!window.Android;if(!repF)repF=hoyLocal();
+ <span class="sub">Lo que empieza con estas palabras va a barra; lo demás a cocina. La barra se abre en <code>http://${ip}:8080/barra</code>. En Caja la comanda queda lista cuando terminan las dos.</span></div>
+ <h3>Pantalla para clientes</h3><div class="aj"><span class="sub" style="margin:0">Ábrela en un TV o tablet: <code>http://${ip}:8080/cliente</code>. Muestra el nombre que la caja escribe en la nota de Wally.</span></div>`}
+function reporteHtml(){const and=!!window.Android;if(!repF)repF=hoyLocal();
  return `<h3>Reporte del servicio</h3><div class="aj"><label>Fecha <input id="repF" type="date" value="${repF}" style="width:auto"></label>
  <label>Turno <select id="repT">${[["","Todo el día"],["AM","Turno AM"],["PM","Turno PM"]].map(([v,t])=>`<option value="${v}" ${repT===v?"selected":""}>${t}</option>`).join("")}</select></label>
  <button class="b" id="btnRep">📄 ${and?"Compartir reporte PDF":"Descargar reporte PDF"}</button>
- <span class="sub">Comandas, tiempo de cada una, promedio, producto que más demoró y resultado por encargado. Listo para enviar al grupo de cocina.</span></div>
- ${and?sheetsHtml():""}
+ <span class="sub">Comandas, tiempo de cada una, promedio, producto que más demoró y resultado por encargado. Listo para enviar al grupo de cocina.</span></div>`}
+function vAjustes(){const and=!!window.Android,ip=esc(est.ip||"–");
+ return `<h3>Conexión con Wally</h3><div class="aj"><span class="sub" style="margin:0">En Wally: impresora <b>BIENEX E802</b>, ancho 48, IP <code>${ip}</code>, puerto <code>9100</code>.</span></div>
  ${estacHtml()}
  ${palHtml()}
  ${and?`<h3>Sonido de pedidos</h3><div class="aj"><div class="filtroT">${["Normal","Fuerte","Máximo"].map((t,i)=>`<button data-vol="${i}" class="${Android.volumen()===i?"on":""}">${t}</button>`).join("")}</div>
  <button class="b" id="btnSon">🔊 Probar sonido</button>
  <span class="sub">Suena por el canal de alarma y sube el volumen sola en cada pedido. Máximo repite el aviso 3 veces.</span></div>`:""}
- <h3>Ajustes</h3><div class="aj"><label>Verde hasta <input id="semV" type="number" min="1" max="60" value="${est.verde}"> min</label>
+ <h3>Semáforo de tiempo</h3><div class="aj"><label>Verde hasta <input id="semV" type="number" min="1" max="60" value="${est.verde}"> min</label>
  <label>Rojo desde <input id="semA" type="number" min="2" max="120" value="${est.ambar}"> min</label>
- <button class="b" id="btnSem">Guardar semáforo</button>
- <span class="sub">IP para Wally: <b>${esc(est.ip||"–")}</b> · puerto 9100 · modelo BIENEX E802</span>
- ${and?`<button class="b" id="btnInicio">Usar KDS como pantalla de inicio</button><button class="b" id="btnAjAnd">Ajustes de la tablet</button>`:""}</div>`}
+ <button class="b" id="btnSem">Guardar semáforo</button></div>
+ ${and?sheetsHtml():""}
+ ${and?`<h3>Tablet</h3><div class="aj"><button class="b" id="btnInicio">Usar KDS como pantalla de inicio</button><button class="b" id="btnAjAnd">Ajustes de la tablet</button></div>`:""}`}
 function pintar(){
  const foco=document.activeElement;
- if(vista==="tiempos"&&foco&&(foco.tagName==="INPUT"||foco.tagName==="TEXTAREA")&&$("vista").contains(foco))return; // no borrar lo que se está escribiendo
+ if((vista==="tiempos"||vista==="ajustes")&&foco&&(foco.tagName==="INPUT"||foco.tagName==="TEXTAREA")&&$("vista").contains(foco))return; // no borrar lo que se está escribiendo
  document.body.classList.toggle("cliente",vista==="cliente");document.body.classList.toggle("compacto",!!pref.compacto);
  $("btnVistaC").hidden=vista!=="cliente";$("navBarra").hidden=!est.estaciones;
- $("vista").innerHTML=vista==="tiempos"?vTiempos():vista==="cliente"?vCliente():vTablero(vista);flash.clear();
+ $("vista").innerHTML=vista==="tiempos"?vTiempos():vista==="ajustes"?vAjustes():vista==="cliente"?vCliente():vTablero(vista);flash.clear();
  $("nAb").textContent=est.comandas.filter(c=>c.estado==="abierta").length;
  const m=est.hist.map(h=>h.min);$("prom").textContent=m.length?mmss(m.reduce((a,b)=>a+b,0)/m.length*60):"–";
  $("encNom").textContent=est.encargado||"Sin encargado";$("encDesde").textContent=est.turno_desde?hhmm(est.turno_desde).slice(0,5):"–";
  $("encTurno").textContent=est.turno?"Turno "+est.turno:"Sin turno";
  const fin=turnoTermino();$("btnTurno").classList.toggle("alerta",fin);
  $("encAcc").textContent=fin?"Turno "+est.turno+" terminó · Cambiar":"Cambiar turno";
- $("btnRec").hidden=vista!=="cocina"&&vista!=="barra";$("btnVista").hidden=vista==="tiempos";$("ipw").textContent=est.ip||"–";
+ $("btnRec").hidden=vista!=="cocina"&&vista!=="barra";$("btnVista").hidden=$("btnTotal").hidden=vista==="tiempos"||vista==="ajustes";
+ $("btnTotal").textContent=(pref.total?"✓ ":"")+"Total por preparar";$("ipw").textContent=est.ip||"–";
  document.querySelectorAll("nav a").forEach(a=>a.classList.toggle("on",a.dataset.v===vista))}
 
 // ---- capa de inicio: turno en cocina, activar sonido en caja
@@ -359,10 +358,13 @@ $("fTurno").onsubmit=e=>{e.preventDefault();audio();
  $("capa").hidden=true};
 $("btnSeguir").onclick=()=>{audio();$("capa").hidden=true};
 $("btnTurno").onclick=()=>{vista="cocina";location.hash="cocina";pintar();abrirCapa()};
-$("btnRec").onclick=()=>post("recuperar",{estacion:deEst(vista)||""});
+$("btnRec").onclick=()=>{$("menu").hidden=true;post("recuperar",{estacion:deEst(vista)||""})};
 
 $("btnRecargar").onclick=()=>location.reload();
-$("btnVista").onclick=$("btnVistaC").onclick=()=>{pintarPanel();$("panelV").hidden=!$("panelV").hidden};
+$("btnMenu").onclick=e=>{e.stopPropagation();$("menu").hidden=!$("menu").hidden};
+document.addEventListener("click",e=>{if(!$("menu").hidden&&!e.target.closest("#menu,#btnMenu"))$("menu").hidden=true});
+$("btnTotal").onclick=()=>{pref.total=!pref.total;$("menu").hidden=true;guardarPref()};
+$("btnVista").onclick=$("btnVistaC").onclick=e=>{e.stopPropagation();$("menu").hidden=true;pintarPanel();$("panelV").hidden=!$("panelV").hidden};
 $("cerrarV").onclick=()=>$("panelV").hidden=true;
 $("panelV").addEventListener("click",e=>{const b=e.target.closest("button[data-k]");if(!b)return;const k=b.dataset.k;
  pref[k]=b.dataset.v==="tg"?!pref[k]:+b.dataset.v;guardarPref()});
@@ -394,7 +396,7 @@ $("vista").addEventListener("click",e=>{const el=e.target.closest("[data-a]");if
  post(el.dataset.a,{id:+el.dataset.id,idx:el.dataset.i!==undefined?+el.dataset.i:null,estacion:el.dataset.est||""})});
 $("vista").addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){const el=e.target.closest("li[data-a]");if(el){e.preventDefault();el.click()}}});
 
-function ruta(){const h=location.hash.slice(1);if(MODO!=="cliente"&&["cocina","barra","caja","tiempos"].includes(h))vista=h;pintar()}
+function ruta(){const h=location.hash.slice(1);if(MODO!=="cliente"&&["cocina","barra","caja","tiempos","ajustes"].includes(h))vista=h;pintar()}
 addEventListener("hashchange",ruta);
 
 function conectar(){const es=new EventSource("/eventos");
@@ -405,12 +407,12 @@ function conectar(){const es=new EventSource("/eventos");
   const primera=!listo;listo=true;pintar();
   if(primera){
    // El turno se mantiene hasta que alguien toque "Cambiar turno". En la app no se vuelve a pedir el nombre.
-   if(vista==="tiempos"||(window.Android&&(vista!=="cocina"||est.encargado))){$("capa").hidden=true;audio()}
+   if(vista==="tiempos"||vista==="ajustes"||(window.Android&&(vista!=="cocina"||est.encargado))){$("capa").hidden=true;audio()}
    else abrirCapa();
    return}
   const af=d.afecta||[],st=deEst(vista),mia=!st||!af.length||af.includes(st);
   const suena=(vista==="cocina"||vista==="barra")?(mia?["nueva","cambio","anulacion"]:[]):vista==="caja"?["listo","anulacion"]:vista==="cliente"?["listo"]:[];
   if(suena.includes(d.evento))bip(d.evento)}}
-ruta();conectar();setInterval(()=>{if(vista!=="tiempos")pintar()},1000);
+ruta();conectar();setInterval(()=>{if(vista!=="tiempos"&&vista!=="ajustes")pintar()},1000);
 })();
 </script></body></html>
