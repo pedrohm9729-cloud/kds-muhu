@@ -286,12 +286,12 @@ function vTiempos(){
  return kp+porT+pE+tEnc+reporteHtml()+`<div class="grid2">${tabla("Por producto","Producto",agrupar(h=>h.prods.map(x=>x[1])))}${tabla("Por mozo","Mozo",agrupar(h=>[h.mozo||"—"]))}</div>
  <h3>Detalle por comanda</h3><div class="tbl"><table><tr><th>#</th><th>Mesa</th><th>Turno</th><th>Encargado</th><th>Mozo</th><th>Entró</th><th>Listo</th><th>Tiempo</th><th>Productos</th></tr>${det}</table></div>`}
 
-let repF=null,repT="",sUrl="",sClave="";
+let repF=null,repT="",sUrl=null,sClave=null;
 function sheetsHtml(){const y=est.sync||{};
  const estado=!y.activo?"No conectado":y.error?`⚠️ ${esc(y.error)}`:`✅ Conectado${y.ultimo_ok?" · último envío "+hhmm(y.ultimo_ok).slice(0,5):""}`;
  return `<h3>Google Sheets (ver en línea)</h3><div class="aj"><span class="sub" style="flex-basis:100%">${estado} · ${y.pendientes||0} comanda(s) por enviar</span>
- <label style="flex:1 1 320px">URL de la aplicación web <input id="sUrl" value="${esc(sUrl)}" placeholder="https://script.google.com/macros/s/.../exec" style="width:100%"></label>
- <label>Clave <input id="sClave" value="${esc(sClave)}" style="width:200px"></label>
+ <label style="flex:1 1 320px">URL de la aplicación web <input id="sUrl" value="${esc(sUrl??(y.url||""))}" placeholder="https://script.google.com/macros/s/.../exec" style="width:100%"></label>
+ <label>Clave <input id="sClave" value="${esc(sClave??(y.clave||""))}" style="width:200px"></label>
  <button class="b" id="btnSync">Guardar y conectar</button>${y.activo?'<button class="b" id="btnSyncYa">Enviar ahora</button>':""}
  <span class="sub">Al conectar se sube también el historial guardado en la tablet. Si se cae el internet, las comandas esperan y se envían solas al volver.</span></div>`}
 function hoyLocal(){const d=new Date(Date.now()+desfase*1000);return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}
@@ -388,7 +388,7 @@ $("vista").addEventListener("click",e=>{const t=e.target;
  if(t.dataset&&t.dataset.probar&&window.Android)Android.probarSonido(t.dataset.probar);
  if(t.dataset&&t.dataset.snuevo!==undefined&&window.Android){Android.ponerSonidoNuevo(t.dataset.snuevo==="1");document.querySelectorAll("[data-snuevo]").forEach(b=>b.classList.toggle("on",b===t))}
  if(t.dataset&&t.dataset.vol!==undefined&&window.Android){Android.ponerVolumen(+t.dataset.vol);document.querySelectorAll("[data-vol]").forEach(b=>b.classList.toggle("on",b===t))}
- if(t.id==="btnSync"){post("sync_config",{url:sUrl.trim(),clave:sClave.trim()}).then(r=>{if(!r.ok)alertar("La URL debe empezar con https://script.google.com/")})}
+ if(t.id==="btnSync"){post("sync_config",{url:(sUrl??($("sUrl").value||"")).trim(),clave:(sClave??($("sClave").value||"")).trim()}).then(r=>{if(!r.ok)alertar("La URL debe empezar con https://script.google.com/")})}
  if(t.id==="btnSyncYa")post("sync_ahora",{});
  if(t.id==="btnRep"){repF=$("repF").value||hoyLocal();if(window.Android)Android.reportePdf(repF,repT);else location.href="/reporte.pdf?fecha="+repF+(repT?"&turno="+repT:"")}
  if(t.dataset&&t.dataset.ft){fT=t.dataset.ft;pintar()}

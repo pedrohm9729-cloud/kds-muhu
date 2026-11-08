@@ -265,7 +265,7 @@ class Estado(private val dir: File) {
                 Turnos.horario.forEach { (k, v) -> put(k, JSONArray(listOf(v.first, v.second))) }
             })
             put("sync", JSONObject().apply {
-                put("activo", sync.activo); put("pendientes", sync.pendientes())
+                put("activo", sync.activo); put("pendientes", sync.pendientes()); put("url", sync.url); put("clave", sync.clave)
                 put("ultimo_ok", sync.ultimoOk.j()); put("error", sync.error.j())
             })
             put("comandas", JSONArray().apply { comandas.forEach { put(comandaJ(it)) } })

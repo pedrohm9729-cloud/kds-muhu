@@ -23,12 +23,24 @@ class Sync(private val dir: File) {
     @Volatile var error: String? = null; private set
     @Volatile var alCambiar: (() -> Unit)? = null
 
+    companion object {
+        /** Hoja de Muhu: viene configurada de fábrica, nadie tiene que escribirla. */
+        const val URL_MUHU = "https://script.google.com/macros/s/AKfycbzVqCkVEyeqiSeQAn7VVvPFj3rFIvNwPiCSx1ekxI65kmRFm0yvaLU119u4V8I6eXYI/exec"
+        const val CLAVE_MUHU = "b64b96a9cf53f9560fc12b88"
+    }
+
     init {
         try {
             val c = JSONObject(archConf.readText())
             url = c.optString("url"); clave = c.optString("clave")
             ultimoOk = if (c.has("ultimo_ok")) c.optDouble("ultimo_ok") else null
         } catch (_: Exception) { }
+        if (url.isBlank()) { url = URL_MUHU; clave = CLAVE_MUHU }
+        if (!archConf.exists()) {
+            guardarConf()
+            // Primera vez: sube también lo que ya estaba guardado en la tablet (la hoja descarta duplicados)
+            encolarHistorial(File(dir, "historial_comandas.csv"))
+        }
     }
 
     val activo get() = url.startsWith("https://")
@@ -111,7 +123,9 @@ class Sync(private val dir: File) {
         if (r == null || !r.optBoolean("ok")) {
             marcarError(when (r?.optString("error")) {
                 "clave" -> "La clave no coincide con la de la hoja"
-                null -> "Respuesta inesperada. Revisa la URL de la aplicación web"
+                null -> if (respuesta.contains("accounts.google.com") || respuesta.contains("<html", true))
+                    "Google pide iniciar sesión: en Apps Script, el acceso debe ser \"Cualquier usuario\""
+                    else "Respuesta inesperada. Revisa la URL de la aplicación web"
                 else -> "Error de la hoja: ${r.optString("error")}"
             })
             return
