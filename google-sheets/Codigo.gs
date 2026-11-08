@@ -1,7 +1,7 @@
 /**
  * KDS Muhu → Google Sheets
  * Recibe las comandas despachadas desde la tablet del KDS y las guarda en las
- * pestañas "Comandas" y "Productos". Si una comanda llega dos veces, se actualiza
+ * pestañas "Comandas" y "Productos", con su turno (AM 07:00–14:30, PM 14:30–23:00). Si una comanda llega dos veces, se actualiza
  * (no se duplica).
  *
  * Instalación: Extensiones → Apps Script → pegar este código → Implementar →
@@ -36,21 +36,22 @@ function doPost(e) {
       const clave = r.fecha + '#' + r.id + '#' + r.entro;
       const dia = fecha(r.fecha, '00:00:00');
       const prods = r.productos || [];
+      const turno = (r.turno === 'AM' || r.turno === 'PM') ? r.turno : (String(r.entro) < '14:30' ? 'AM' : 'PM');
       const fila = [r.id, dia, r.mesa || '', r.zona || '', r.titulo || '', r.encargado || '', r.mozo || '',
         fecha(r.fecha, r.entro), fecha(r.fecha, r.listo), Number(r.minutos),
-        prods.map(p => p[0] + ' ' + p[1]).join(' | '), clave];
+        prods.map(p => p[0] + ' ' + p[1]).join(' | '), clave, turno];
       if (filaDeClave[clave]) {
-        hojaC.getRange(filaDeClave[clave], 1, 1, 12).setValues([fila]);
+        hojaC.getRange(filaDeClave[clave], 1, 1, 13).setValues([fila]);
         actualizadas++;
         return;
       }
       filaDeClave[clave] = -1;
       nuevasC.push(fila);
-      prods.forEach(p => nuevasP.push([dia, r.id, p[1], Number(String(p[0]).replace(',', '.')) || 1, Number(r.minutos), clave]));
+      prods.forEach(p => nuevasP.push([dia, r.id, p[1], Number(String(p[0]).replace(',', '.')) || 1, Number(r.minutos), clave, turno]));
     });
 
-    if (nuevasC.length) hojaC.getRange(hojaC.getLastRow() + 1, 1, nuevasC.length, 12).setValues(nuevasC);
-    if (nuevasP.length) hojaP.getRange(hojaP.getLastRow() + 1, 1, nuevasP.length, 6).setValues(nuevasP);
+    if (nuevasC.length) hojaC.getRange(hojaC.getLastRow() + 1, 1, nuevasC.length, 13).setValues(nuevasC);
+    if (nuevasP.length) hojaP.getRange(hojaP.getLastRow() + 1, 1, nuevasP.length, 7).setValues(nuevasP);
     return salida({ ok: true, nuevas: nuevasC.length, actualizadas: actualizadas });
   } finally {
     lock.releaseLock();

@@ -66,17 +66,19 @@ class Sync(private val dir: File) {
             if (r.size < 11) return@forEach
             encolar(fila(r[0].toIntOrNull() ?: 0, r[1], r[2], r[3], r[4], r[5], r[6], r[7], r[8],
                 r[9].toDoubleOrNull() ?: 0.0,
-                r[10].split(" | ").mapNotNull { p -> Parser.ITEM.find(p.trim())?.let { it.groupValues[1] to it.groupValues[2] } }))
+                r[10].split(" | ").mapNotNull { p -> Parser.ITEM.find(p.trim())?.let { it.groupValues[1] to it.groupValues[2] } },
+                r.getOrNull(11)?.takeIf { Turnos.valido(it) } ?: Turnos.de(r[7])))
             n++
         }
         return n
     }
 
     fun fila(id: Int, fecha: String, mesa: String?, zona: String?, titulo: String?, enc: String?, mozo: String?,
-             entro: String, listo: String, minutos: Double, prods: List<Pair<String, String>>) = JSONObject().apply {
+             entro: String, listo: String, minutos: Double, prods: List<Pair<String, String>>,
+             turno: String) = JSONObject().apply {
         put("id", id); put("fecha", fecha); put("mesa", mesa ?: ""); put("zona", zona ?: "")
         put("titulo", titulo ?: ""); put("encargado", enc ?: ""); put("mozo", mozo ?: "")
-        put("entro", entro); put("listo", listo); put("minutos", Math.round(minutos * 10) / 10.0)
+        put("turno", turno); put("entro", entro); put("listo", listo); put("minutos", Math.round(minutos * 10) / 10.0)
         put("productos", JSONArray().apply { prods.forEach { put(JSONArray(listOf(it.first, it.second))) } })
     }
 

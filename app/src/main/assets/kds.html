@@ -73,6 +73,14 @@ h3{font:800 16px var(--f-disp);letter-spacing:1.4px;text-transform:uppercase;col
 .turno h2{font:800 32px/1 var(--f-disp);text-transform:uppercase;letter-spacing:.5px;margin:0}
 .turno p{color:var(--sub);margin:0}
 .turno input{background:var(--bg);border:1px solid var(--linea);color:var(--txt);border-radius:10px;padding:14px;font:600 22px var(--f-txt);width:100%}
+.selT{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.selT button{background:var(--ticket);border:2px solid var(--linea);padding:12px 8px;font:800 22px var(--f-disp);text-transform:uppercase;display:flex;flex-direction:column;align-items:center;gap:2px}
+.selT button small{font:500 13px var(--f-num);color:var(--sub);text-transform:none}
+.selT button.on{border-color:var(--cafe);background:color-mix(in srgb,var(--cafe) 25%,var(--ticket))}
+.chip.enc.alerta{border-color:var(--ambar);background:color-mix(in srgb,var(--ambar) 22%,var(--bg))}
+.filtroT{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}.filtroT button{background:var(--ticket);border:1px solid var(--linea);padding:7px 14px;font-weight:600}
+.filtroT button.on{background:var(--cafe);border-color:var(--cafe);color:#1a1410}
+.aj select{background:var(--bg);border:1px solid var(--linea);color:var(--txt);border-radius:8px;padding:6px;font:600 15px var(--f-txt)}
 .verde{background:var(--verde);color:#0d1a10;font:800 24px var(--f-disp);letter-spacing:1px;padding:15px}
 .verde:disabled{opacity:.4;cursor:not-allowed}
 .sec2{background:var(--ticket);border:1px solid var(--linea);font:700 18px var(--f-disp);letter-spacing:.6px;padding:12px;text-transform:uppercase}
@@ -88,6 +96,7 @@ h3{font:800 16px var(--f-disp);letter-spacing:1.4px;text-transform:uppercase;col
   <h2 id="capaT">Inicio de turno</h2>
   <p id="capaP">Escribe tu nombre para empezar. Las comandas que despaches quedarán a tu nombre.</p>
   <input id="inNombre" maxlength="24" placeholder="Tu nombre" aria-label="Tu nombre">
+  <div class="selT" id="selT"><button type="button" data-t="AM">Turno AM<small>07:00 – 14:30</small></button><button type="button" data-t="PM">Turno PM<small>14:30 – 23:00</small></button></div>
   <button class="verde" id="btnEmpezar" type="submit" disabled>Empezar turno</button>
   <button class="sec2" id="btnSeguir" type="button" hidden></button>
 </form></div>
@@ -95,7 +104,7 @@ h3{font:800 16px var(--f-disp);letter-spacing:1.4px;text-transform:uppercase;col
   <div class="marca"><span id="conexion" title="Conexión con el servidor"></span>Muhu <span>KDS</span></div>
   <nav><a href="#cocina" data-v="cocina">Cocina</a><a href="#caja" data-v="caja">Caja</a><a href="#tiempos" data-v="tiempos">Tiempos</a></nav>
   <span class="esp"></span>
-  <button class="chip enc" id="btnTurno" title="Cambiar de encargado">👤 <b id="encNom">–</b> · desde <b id="encDesde">–</b> · Cambiar turno</button>
+  <button class="chip enc" id="btnTurno" title="Cambiar de encargado">👤 <b id="encNom">–</b> · <b id="encTurno">–</b> · desde <b id="encDesde">–</b> · <span id="encAcc">Cambiar turno</span></button>
   <span class="chip oc" title="Configura esta IP en Wally como impresora BIENEX E802">Wally → <b id="ipw">–</b></span>
   <span class="chip">Abiertas <b id="nAb">0</b></span>
   <span class="chip oc">Promedio hoy <b id="prom">–</b></span>
@@ -145,28 +154,38 @@ function vTablero(modo){
  if(modo==="cocina"&&li.length)h+=`<div class="sec">Despachadas recientes</div>${li.slice(0,4).map(c=>tarjeta(c,modo)).join("")}`;
  return `<div class="tablero ${modo}">${h}</div>`}
 
-function agrupar(fn){const g=new Map();for(const h of est.hist)for(const k of fn(h)){if(!g.has(k))g.set(k,[]);g.get(k).push(h.min)}
+let histVista=[];
+function agrupar(fn){const g=new Map();for(const h of histVista)for(const k of fn(h)){if(!g.has(k))g.set(k,[]);g.get(k).push(h.min)}
  return [...g].map(([k,v])=>[k,v.length,v.reduce((a,b)=>a+b,0)/v.length,Math.max(...v)]).sort((a,b)=>b[2]-a[2])}
 function tabla(t,col,d){if(!d.length)return"";return `<div><h3>${t}</h3><div class="tbl"><table><tr><th>${col}</th><th>Veces</th><th>Promedio</th><th>Máximo</th></tr>
  ${d.map(([k,n,p,mx])=>`<tr><td>${esc(k)}</td><td class="n">${n}</td><td class="n ${cls(p)}">${mmss(p*60)}</td><td class="n">${mmss(mx*60)}</td></tr>`).join("")}</table></div></div>`}
+let fT="Todos",turnoSel=null;
+function horaAhora(){const d=new Date(Date.now()+desfase*1000);return String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0")}
+function turnoDeHora(h){return h<"14:30"?"AM":"PM"}
+function turnoTermino(){if(!est.turno||!est.turnos||!est.turnos[est.turno])return false;const [ini,fin]=est.turnos[est.turno],h=horaAhora();return h<ini||h>=fin}
 function vTiempos(){
- const H=est.hist,m=H.map(h=>h.min),p=m.length?m.reduce((a,b)=>a+b,0)/m.length:0;
- const kp=`<div class="kpis"><div class="k"><small>Despachadas hoy</small><b>${m.length}</b></div>
+ const filtro=`<div class="filtroT">${["Todos","AM","PM"].map(t=>`<button type="button" data-ft="${t}" class="${fT===t?"on":""}">${t==="Todos"?"Todo el día":"Turno "+t}</button>`).join("")}</div>`;
+ const H=fT==="Todos"?est.hist:est.hist.filter(h=>(h.turno||turnoDeHora(hhmm(h.entro)))===fT),m=H.map(h=>h.min),p=m.length?m.reduce((a,b)=>a+b,0)/m.length:0;
+ histVista=H;
+ const kp=filtro+`<div class="kpis"><div class="k"><small>Despachadas ${fT==="Todos"?"hoy":"turno "+fT}</small><b>${m.length}</b></div>
   <div class="k"><small>Tiempo promedio</small><b class="${m.length?cls(p):""}">${m.length?mmss(p*60):"–"}</b></div>
   <div class="k"><small>Más rápida</small><b>${m.length?mmss(Math.min(...m)*60):"–"}</b></div>
   <div class="k"><small>Más lenta</small><b>${m.length?mmss(Math.max(...m)*60):"–"}</b></div>
   <div class="k"><small>Fuera de tiempo (≥${est.ambar} min)</small><b class="cr">${m.filter(x=>x>=est.ambar).length}</b></div></div>`;
- if(!H.length)return kp+ajustes()+`<div class="vacio">Aún no hay comandas despachadas hoy.</div>`;
+ if(!H.length)return kp+ajustes()+`<div class="vacio">Aún no hay comandas despachadas ${fT==="Todos"?"hoy":"en el turno "+fT}.</div>`;
+ const porT=fT!=="Todos"?"":(()=>{const ts=["AM","PM"].map(t=>[t,H.filter(h=>(h.turno||turnoDeHora(hhmm(h.entro)))===t)]).filter(x=>x[1].length);
+  if(ts.length<2)return"";return `<h3>Por turno</h3><div class="tbl" style="margin-bottom:18px"><table><tr><th>Turno</th><th>Comandas</th><th>Promedio</th><th>Fuera de tiempo</th><th>Encargados</th></tr>${ts.map(([t,v])=>{const pm=v.reduce((a,x)=>a+x.min,0)/v.length;
+  return `<tr><td><b>${t}</b></td><td class="n">${v.length}</td><td class="n ${cls(pm)}"><b>${mmss(pm*60)}</b></td><td class="n">${Math.round(v.filter(x=>x.min>=est.ambar).length*100/v.length)}%</td><td>${esc([...new Set(v.map(x=>x.enc).filter(Boolean))].join(", "))}</td></tr>`}).join("")}</table></div>`})();
  const g=new Map();for(const h of H){const k=h.enc||"Sin turno";if(!g.has(k))g.set(k,[]);g.get(k).push(h)}
  const enc=[...g].map(([k,v])=>{const mm=v.map(x=>x.min);return [k,v.length,v.reduce((s,x)=>s+x.prods.reduce((a,q)=>a+(parseFloat(q[0])||0),0),0),
   mm.reduce((a,b)=>a+b,0)/mm.length,mm.filter(x=>x>=est.ambar).length/mm.length]}).sort((a,b)=>a[3]-b[3]);
  const tEnc=`<h3>Por encargado (del más rápido al más lento)</h3><div class="tbl" style="margin-bottom:18px"><table><tr><th>Encargado</th><th>Comandas</th><th>Productos</th><th>Promedio</th><th>Fuera de tiempo</th></tr>
  ${enc.map(([k,n,pr,pm,f],i)=>`<tr><td>${i===0&&enc.length>1?"🏆 ":""}<b>${esc(k)}</b>${k===est.encargado?" <span style='color:var(--azul);font-weight:700;font-size:13px'>· en turno</span>":""}</td><td class="n">${n}</td><td class="n">${pr}</td><td class="n ${cls(pm)}"><b>${mmss(pm*60)}</b></td><td class="n ${f>0?"cr":""}">${Math.round(f*100)}%</td></tr>`).join("")}</table></div>`;
- const det=[...H].reverse().map(h=>`<tr><td class="n">#${h.id}</td><td class="n">${esc(h.mesa||"—")}</td><td><b>${esc(h.enc||"—")}</b></td><td>${esc(h.mozo||"")}</td><td class="n">${hhmm(h.entro)}</td><td class="n">${hhmm(h.listo)}</td><td class="n ${cls(h.min)}"><b>${mmss(h.min*60)}</b></td><td class="prods">${h.prods.map(([c,q])=>esc(c)+" "+esc(q)).join(" · ")}</td></tr>`).join("");
- return kp+tEnc+ajustes()+`<div class="grid2">${tabla("Por producto","Producto",agrupar(h=>h.prods.map(x=>x[1])))}${tabla("Por mozo","Mozo",agrupar(h=>[h.mozo||"—"]))}</div>
- <h3>Detalle por comanda</h3><div class="tbl"><table><tr><th>#</th><th>Mesa</th><th>Encargado</th><th>Mozo</th><th>Entró</th><th>Listo</th><th>Tiempo</th><th>Productos</th></tr>${det}</table></div>`}
+ const det=[...H].reverse().map(h=>`<tr><td class="n">#${h.id}</td><td class="n">${esc(h.mesa||"—")}</td><td>${esc(h.turno||"")}</td><td><b>${esc(h.enc||"—")}</b></td><td>${esc(h.mozo||"")}</td><td class="n">${hhmm(h.entro)}</td><td class="n">${hhmm(h.listo)}</td><td class="n ${cls(h.min)}"><b>${mmss(h.min*60)}</b></td><td class="prods">${h.prods.map(([c,q])=>esc(c)+" "+esc(q)).join(" · ")}</td></tr>`).join("");
+ return kp+porT+tEnc+ajustes()+`<div class="grid2">${tabla("Por producto","Producto",agrupar(h=>h.prods.map(x=>x[1])))}${tabla("Por mozo","Mozo",agrupar(h=>[h.mozo||"—"]))}</div>
+ <h3>Detalle por comanda</h3><div class="tbl"><table><tr><th>#</th><th>Mesa</th><th>Turno</th><th>Encargado</th><th>Mozo</th><th>Entró</th><th>Listo</th><th>Tiempo</th><th>Productos</th></tr>${det}</table></div>`}
 
-let repF=null,sUrl="",sClave="";
+let repF=null,repT="",sUrl="",sClave="";
 function sheetsHtml(){const y=est.sync||{};
  const estado=!y.activo?"No conectado":y.error?`⚠️ ${esc(y.error)}`:`✅ Conectado${y.ultimo_ok?" · último envío "+hhmm(y.ultimo_ok).slice(0,5):""}`;
  return `<h3>Google Sheets (ver en línea)</h3><div class="aj"><span class="sub" style="flex-basis:100%">${estado} · ${y.pendientes||0} comanda(s) por enviar</span>
@@ -177,6 +196,7 @@ function sheetsHtml(){const y=est.sync||{};
 function hoyLocal(){const d=new Date(Date.now()+desfase*1000);return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}
 function ajustes(){const and=!!window.Android;if(!repF)repF=hoyLocal();
  return `<h3>Reporte del servicio</h3><div class="aj"><label>Fecha <input id="repF" type="date" value="${repF}" style="width:auto"></label>
+ <label>Turno <select id="repT">${[["","Todo el día"],["AM","Turno AM"],["PM","Turno PM"]].map(([v,t])=>`<option value="${v}" ${repT===v?"selected":""}>${t}</option>`).join("")}</select></label>
  <button class="b" id="btnRep">📄 ${and?"Compartir reporte PDF":"Descargar reporte PDF"}</button>
  <span class="sub">Comandas, tiempo de cada una, promedio, producto que más demoró y resultado por encargado. Listo para enviar al grupo de cocina.</span></div>
  ${and?sheetsHtml():""}
@@ -192,6 +212,9 @@ function pintar(){
  $("nAb").textContent=est.comandas.filter(c=>c.estado==="abierta").length;
  const m=est.hist.map(h=>h.min);$("prom").textContent=m.length?mmss(m.reduce((a,b)=>a+b,0)/m.length*60):"–";
  $("encNom").textContent=est.encargado||"Sin encargado";$("encDesde").textContent=est.turno_desde?hhmm(est.turno_desde).slice(0,5):"–";
+ $("encTurno").textContent=est.turno?"Turno "+est.turno:"Sin turno";
+ const fin=turnoTermino();$("btnTurno").classList.toggle("alerta",fin);
+ $("encAcc").textContent=fin?"Turno "+est.turno+" terminó · Cambiar":"Cambiar turno";
  $("btnRec").hidden=vista!=="cocina";$("ipw").textContent=est.ip||"–";
  document.querySelectorAll("nav a").forEach(a=>a.classList.toggle("on",a.dataset.v===vista))}
 
@@ -200,27 +223,33 @@ function abrirCapa(){
  const enCocina=vista==="cocina";
  $("capaT").textContent=enCocina?"Inicio de turno":"Pantalla de caja";
  $("capaP").textContent=enCocina?"Escribe tu nombre para empezar. Las comandas que despaches quedarán a tu nombre.":"Activa la pantalla para escuchar el aviso cuando un pedido esté listo.";
- $("inNombre").hidden=!enCocina;$("inNombre").value="";
+ $("inNombre").hidden=!enCocina;$("inNombre").value="";$("selT").hidden=!enCocina;
+ turnoSel=turnoDeHora(horaAhora());marcarTurno();
  $("btnEmpezar").textContent=enCocina?"Empezar turno":"Activar pantalla";$("btnEmpezar").disabled=enCocina;
- const sig=$("btnSeguir");sig.hidden=!(enCocina&&est.encargado);if(est.encargado)sig.textContent="Continuar como "+est.encargado;
+ if(enCocina)marcarTurno();
+ const sig=$("btnSeguir");sig.hidden=!(enCocina&&est.encargado&&!turnoTermino());if(est.encargado)sig.textContent="Continuar como "+est.encargado+(est.turno?" · Turno "+est.turno:"");
  $("capa").hidden=false;if(enCocina)setTimeout(()=>$("inNombre").focus(),50)}
+function marcarTurno(){document.querySelectorAll("#selT button").forEach(b=>b.classList.toggle("on",b.dataset.t===turnoSel));
+ if(vista==="cocina")$("btnEmpezar").textContent="Empezar turno "+(turnoSel||"")}
+$("selT").onclick=e=>{const b=e.target.closest("button");if(!b)return;turnoSel=b.dataset.t;marcarTurno()};
 $("inNombre").oninput=()=>{$("btnEmpezar").disabled=!$("inNombre").value.trim()};
 $("fTurno").onsubmit=e=>{e.preventDefault();audio();
- if(vista==="cocina"){const n=$("inNombre").value.trim();if(!n)return;post("turno",{nombre:n})}
+ if(vista==="cocina"){const n=$("inNombre").value.trim();if(!n)return;post("turno",{nombre:n,turno:turnoSel||turnoDeHora(horaAhora())})}
  $("capa").hidden=true};
 $("btnSeguir").onclick=()=>{audio();$("capa").hidden=true};
 $("btnTurno").onclick=()=>{vista="cocina";location.hash="cocina";pintar();abrirCapa()};
 $("btnRec").onclick=()=>post("recuperar");
 $("btnPrueba").onclick=()=>post("simular");
 $("btnRecargar").onclick=()=>location.reload();
-$("vista").addEventListener("change",e=>{if(e.target.id==="repF")repF=e.target.value});
+$("vista").addEventListener("change",e=>{if(e.target.id==="repF")repF=e.target.value;if(e.target.id==="repT")repT=e.target.value});
 $("vista").addEventListener("input",e=>{if(e.target.id==="sUrl")sUrl=e.target.value;if(e.target.id==="sClave")sClave=e.target.value});
 $("vista").addEventListener("click",e=>{const t=e.target;
  if(t.id==="btnSem"){post("config",{verde:+$("semV").value,ambar:+$("semA").value}).then(r=>{if(!r.ok)alertar("El rojo debe ser mayor que el verde")})}
  if(t.id==="btnInicio"&&window.Android)Android.elegirInicio();
  if(t.id==="btnSync"){post("sync_config",{url:sUrl.trim(),clave:sClave.trim()}).then(r=>{if(!r.ok)alertar("La URL debe empezar con https://script.google.com/")})}
  if(t.id==="btnSyncYa")post("sync_ahora",{});
- if(t.id==="btnRep"){repF=$("repF").value||hoyLocal();if(window.Android)Android.reportePdf(repF);else location.href="/reporte.pdf?fecha="+repF}
+ if(t.id==="btnRep"){repF=$("repF").value||hoyLocal();if(window.Android)Android.reportePdf(repF,repT);else location.href="/reporte.pdf?fecha="+repF+(repT?"&turno="+repT:"")}
+ if(t.dataset&&t.dataset.ft){fT=t.dataset.ft;pintar()}
  if(t.id==="btnAjAnd"&&window.Android)Android.abrirAjustes()});
 function alertar(m){const d=document.createElement("div");d.className="toast";d.textContent=m;document.body.appendChild(d);setTimeout(()=>d.remove(),3000)}
 

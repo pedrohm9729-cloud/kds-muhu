@@ -104,7 +104,7 @@ object Parser {
         val idxFecha = cab.indexOfFirst { FECHA.containsMatchIn(it) }.let { if (it < 0) cab.size else it }
         val desde = if (idxMesa >= 0) idxMesa + 1 else 1
         if (desde < idxFecha) {
-            val libres = cab.subList(desde, idxFecha).filter { !SEP.matches(it) }
+            val libres = cab.subList(desde, idxFecha).filter { !SEP.matches(it) && HORA.find(it) == null }
             c.titulo = libres.joinToString(" ").ifEmpty { null }
         }
 

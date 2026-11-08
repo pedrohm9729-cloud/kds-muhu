@@ -117,19 +117,20 @@ class MainActivity : Activity() {
                 catch (_: Exception) { startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
             }
         }
-        @JavascriptInterface fun reportePdf(dia: String) {
+        @JavascriptInterface fun reportePdf(dia: String, turno: String) {
             val e = KdsService.estado ?: return
             val fecha = if (Regex("\\d{4}-\\d{2}-\\d{2}").matches(dia)) dia else e.hoy()
             thread {
                 try {
                     val dir = File(cacheDir, "reportes").apply { mkdirs() }
-                    val f = File(dir, "reporte_cocina_$fecha.pdf")
-                    f.writeBytes(Reporte.generar(e, fecha))
+                    val tu = turno.takeIf { Turnos.valido(it) }
+                    val f = File(dir, "reporte_cocina_$fecha" + (tu?.let { "_$it" } ?: "") + ".pdf")
+                    f.writeBytes(Reporte.generar(e, fecha, tu))
                     val uri = FileProvider.getUriForFile(this@MainActivity, "pe.muhu.kds.archivos", f)
                     val envio = Intent(Intent.ACTION_SEND).apply {
                         type = "application/pdf"
                         putExtra(Intent.EXTRA_STREAM, uri)
-                        putExtra(Intent.EXTRA_TEXT, "Reporte de cocina Muhu · $fecha")
+                        putExtra(Intent.EXTRA_TEXT, "Reporte de cocina Muhu · $fecha" + (tu?.let { " · Turno $it" } ?: ""))
                         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     }
                     runOnUiThread { startActivity(Intent.createChooser(envio, "Compartir reporte")) }

@@ -161,8 +161,10 @@ class ServidorWeb(private val estado: Estado, private val pagina: String) {
                 metodo == "GET" && ruta == "/eventos" -> eventos(cx, out)
                 metodo == "GET" && ruta == "/reporte.pdf" -> {
                     val dia = Regex("fecha=(\\d{4}-\\d{2}-\\d{2})").find(partes[1])?.groupValues?.get(1) ?: estado.hoy()
-                    responder(out, 200, "application/pdf", Reporte.generar(estado, dia),
-                        "Content-Disposition: attachment; filename=\"reporte_cocina_$dia.pdf\"\r\n")
+                    val tu = Regex("turno=(AM|PM)").find(partes[1])?.groupValues?.get(1)
+                    val nom = "reporte_cocina_$dia" + (tu?.let { "_$it" } ?: "") + ".pdf"
+                    responder(out, 200, "application/pdf", Reporte.generar(estado, dia, tu),
+                        "Content-Disposition: attachment; filename=\"$nom\"\r\n")
                 }
                 metodo == "POST" && ruta == "/accion" -> {
                     val cuerpo = ByteArray(largo.coerceIn(0, 65536))
@@ -178,7 +180,7 @@ class ServidorWeb(private val estado: Estado, private val pagina: String) {
                         if (d.isNull("nombre")) null else d.optString("nombre"),
                         if (d.has("verde")) d.optInt("verde") else null,
                         if (d.has("ambar")) d.optInt("ambar") else null,
-                        d.optString("url"), d.optString("clave"))
+                        d.optString("url"), d.optString("clave"), d.optString("turno"))
                     responder(out, if (ok) 200 else 400, "application/json", "{\"ok\": $ok}".toByteArray())
                 }
                 else -> responder(out, 404, "text/plain; charset=utf-8", "No encontrado".toByteArray())

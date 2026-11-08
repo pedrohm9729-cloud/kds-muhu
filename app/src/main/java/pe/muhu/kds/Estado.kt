@@ -21,7 +21,17 @@ class Comanda(
 class Hist(
     val id: Int, val mesa: String?, val mozo: String?, val enc: String?,
     val entro: Double, val listo: Double, val min: Double, val prods: List<Pair<String, String>>,
+    val turno: String = "AM",
 )
+
+/** Turnos de Muhu. AM: 07:00 a 14:30 · PM: 14:30 a 23:00. */
+object Turnos {
+    const val CAMBIO = "14:30"
+    val horario = mapOf("AM" to ("07:00" to "14:30"), "PM" to ("14:30" to "23:00"))
+    /** Turno que corresponde a una hora "HH:mm" o "HH:mm:ss". */
+    fun de(hora: String) = if (hora.take(5) < CAMBIO) "AM" else "PM"
+    fun valido(t: String?) = t == "AM" || t == "PM"
+}
 
 /** Estado del KDS: comandas, turno y tiempos. Se guarda en disco y se difunde a las pantallas. */
 class Estado(private val dir: File) {
@@ -29,7 +39,8 @@ class Estado(private val dir: File) {
     private val archEstado = File(dir, "kds_estado.json")
     val archHist = File(dir, "historial_comandas.csv")
     private val cols = listOf("id", "fecha", "mesa", "zona", "titulo", "encargado", "mozo",
-        "recibida", "lista", "minutos", "productos")
+        "recibida", "lista", "minutos", "productos", "turno")
+    private val colsV1 = cols.dropLast(1)
 
     val comandas = mutableListOf<Comanda>()
     private val hist = mutableListOf<Hist>()
@@ -37,6 +48,7 @@ class Estado(private val dir: File) {
     private var ultimaDespachada: Int? = null
     var encargado: String? = null; private set
     private var turnoDesde: Double? = null
+    var turno: String? = null; private set
     var verde = 6; private set
     var ambar = 10; private set
     var ip: String = "-"
@@ -74,6 +86,7 @@ class Estado(private val dir: File) {
 
     private fun histJ(h: Hist) = JSONObject().apply {
         put("id", h.id); put("mesa", h.mesa.j()); put("mozo", h.mozo.j()); put("enc", h.enc.j())
+        put("turno", h.turno)
         put("entro", h.entro); put("listo", h.listo); put("min", h.min)
         put("prods", JSONArray().apply { h.prods.forEach { put(JSONArray(listOf(it.first, it.second))) } })
     }
@@ -91,6 +104,7 @@ class Estado(private val dir: File) {
             seq = d.optInt("seq")
             encargado = d.str("encargado")
             turnoDesde = if (d.isNull("turno_desde")) null else d.optDouble("turno_desde")
+            turno = d.optString("turno").takeIf { Turnos.valido(it) }
             verde = d.optInt("verde", 6); ambar = d.optInt("ambar", 10)
             val arr = d.optJSONArray("comandas") ?: JSONArray()
             for (k in 0 until arr.length()) {
@@ -108,6 +122,7 @@ class Estado(private val dir: File) {
         try {
             val d = JSONObject().apply {
                 put("seq", seq); put("encargado", encargado.j()); put("turno_desde", turnoDesde.j())
+                put("turno", turno.j())
                 put("verde", verde); put("ambar", ambar)
                 put("comandas", JSONArray().apply { comandas.forEach { put(comandaJ(it)) } })
             }
@@ -139,8 +154,9 @@ class Estado(private val dir: File) {
                 }
                 val id = r[0].toIntOrNull() ?: 0
                 porId.remove(id)
+                val tu = r.getOrNull(11)?.takeIf { Turnos.valido(it) } ?: Turnos.de(r[7])
                 porId[id] = Hist(id, r[2].ifEmpty { null }, r[6].ifEmpty { null }, r[5].ifEmpty { null },
-                    ent, lis, r[9].toDoubleOrNull() ?: 0.0, prods)
+                    ent, lis, r[9].toDoubleOrNull() ?: 0.0, prods, tu)
             }
         } catch (_: Exception) { }
         return porId.values.toList()
@@ -150,7 +166,14 @@ class Estado(private val dir: File) {
         try {
             if (!archHist.exists()) return
             val cab = archHist.bufferedReader(Charsets.UTF_8).use { it.readLine() } ?: return
-            if (cab.trimStart('\uFEFF').split(";") != cols) {
+            val c0 = cab.trimStart('\uFEFF').split(";")
+            if (c0 == colsV1) {
+                // Versión anterior sin columna de turno: se agrega según la hora de entrada
+                val filas = archHist.readLines(Charsets.UTF_8).drop(1).filter { it.isNotBlank() }
+                    .map { l -> val r = l.split(";"); l + ";" + (if (r.size > 7) Turnos.de(r[7]) else "AM") }
+                archHist.writeText("\uFEFF" + cols.joinToString(";") + "\n" +
+                    filas.joinToString("") { it + "\n" }, Charsets.UTF_8)
+            } else if (c0 != cols) {
                 archHist.renameTo(File(dir, "historial_anterior.csv")); return
             }
             hist.addAll(histDe(fecha(ahora())))
@@ -163,15 +186,16 @@ class Estado(private val dir: File) {
         val lista = c.lista ?: return
         val prods = c.items.filter { !it.cancelado }.map { it.cant to it.producto }
         val mins = (lista - c.recibida) / 60
-        hist.add(Hist(c.id, c.mesa, c.mozo, encargado, c.recibida, lista, mins, prods))
+        val tu = turno ?: Turnos.de(hhmmss(c.recibida))
+        hist.add(Hist(c.id, c.mesa, c.mozo, encargado, c.recibida, lista, mins, prods, tu))
         sync.encolar(sync.fila(c.id, fecha(c.recibida), c.mesa, c.zona, c.titulo, encargado, c.mozo,
-            hhmmss(c.recibida), hhmmss(lista), mins, prods))
+            hhmmss(c.recibida), hhmmss(lista), mins, prods, tu))
         try {
             val nuevo = !archHist.exists()
             val linea = listOf(c.id.toString(), fecha(c.recibida), csv(c.mesa), csv(c.zona), csv(c.titulo),
                 csv(encargado), csv(c.mozo), hhmmss(c.recibida), hhmmss(lista),
                 String.format(Locale.US, "%.1f", mins),
-                csv(prods.joinToString(" | ") { "${it.first} ${it.second}" })).joinToString(";")
+                csv(prods.joinToString(" | ") { "${it.first} ${it.second}" }), tu).joinToString(";")
             archHist.appendText((if (nuevo) "﻿" + cols.joinToString(";") + "\n" else "") + linea + "\n")
         } catch (_: Exception) { }
     }
@@ -184,6 +208,10 @@ class Estado(private val dir: File) {
         JSONObject().apply {
             put("evento", evento); put("ahora", ahora()); put("verde", verde); put("ambar", ambar)
             put("encargado", encargado.j()); put("turno_desde", turnoDesde.j()); put("ip", ip)
+            put("turno", turno.j())
+            put("turnos", JSONObject().apply {
+                Turnos.horario.forEach { (k, v) -> put(k, JSONArray(listOf(v.first, v.second))) }
+            })
             put("sync", JSONObject().apply {
                 put("activo", sync.activo); put("pendientes", sync.pendientes())
                 put("ultimo_ok", sync.ultimoOk.j()); put("error", sync.error.j())
@@ -229,14 +257,15 @@ class Estado(private val dir: File) {
     }
 
     fun accion(a: String, id: Int?, idx: Int?, nombre: String?, v: Int?, am: Int?,
-               url: String? = null, clave: String? = null): Boolean = synchronized(lock) {
+               url: String? = null, clave: String? = null, turnoSel: String? = null): Boolean = synchronized(lock) {
         val c = comandas.firstOrNull { it.id == id }
         val evento: String
         when {
             a == "turno" -> {
                 val n = (nombre ?: "").replace(Regex("\\s+"), " ").trim().take(24)
                 if (n.isEmpty()) return false
-                if (n != encargado) { encargado = n; turnoDesde = ahora() }
+                val tu = turnoSel?.takeIf { Turnos.valido(it) } ?: Turnos.de(hhmmss(ahora()))
+                if (n != encargado || tu != turno) { encargado = n; turno = tu; turnoDesde = ahora() }
                 evento = "turno"
             }
             a == "sync_config" -> {

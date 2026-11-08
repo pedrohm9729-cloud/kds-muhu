@@ -122,8 +122,9 @@ object Reporte {
         h.y += 4f
     }
 
-    fun generar(estado: Estado, dia: String): ByteArray {
-        val hist = estado.histDe(dia).sortedBy { it.entro }
+    fun generar(estado: Estado, dia: String, turno: String? = null): ByteArray {
+        val todo = estado.histDe(dia).sortedBy { it.entro }
+        val hist = if (turno == null) todo else todo.filter { it.turno == turno }
         val verde = estado.verde
         val ambar = estado.ambar
         fun color(min: Double) = if (min < verde) VERDE else if (min < ambar) AMBAR else ROJO
@@ -136,6 +137,10 @@ object Reporte {
         // ---------------------------------------------------------------- cabecera
         h.c.drawRect(0f, 0f, W, 92f, Paint().apply { color = TINTA })
         h.c.drawText("MUHU · REPORTE DE COCINA", M, 40f, p(19f, Color.WHITE, true))
+        val etTurno = if (turno == null) "TODO EL DÍA"
+            else "TURNO $turno · ${Turnos.horario[turno]?.first}–${Turnos.horario[turno]?.second}"
+        val pT = p(11f, Color.rgb(192, 138, 84), true)
+        h.c.drawText(etTurno, W - M - pT.measureText(etTurno), 40f, pT)
         val fechaLarga = try {
             val d = SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(dia)!!
             SimpleDateFormat("EEEE d 'de' MMMM 'de' yyyy", Locale("es", "PE")).format(d)
@@ -147,7 +152,8 @@ object Reporte {
         h.y = 112f
 
         if (hist.isEmpty()) {
-            h.c.drawText("No hay comandas despachadas en esta fecha.", M, h.y + 20f, p(12f, GRIS))
+            h.c.drawText(if (turno == null) "No hay comandas despachadas en esta fecha."
+                else "No hay comandas despachadas en el turno $turno de esta fecha.", M, h.y + 20f, p(12f, GRIS))
             h.cerrar()
             return ByteArrayOutputStream().also { doc.writeTo(it); doc.close() }.toByteArray()
         }
@@ -206,6 +212,17 @@ object Reporte {
             h.y += 14f
         }
 
+        // ---------------------------------------------------------------- por turno
+        if (turno == null && hist.map { it.turno }.distinct().size > 1) {
+            titulo(h, "Por turno", "AM: 07:00–14:30 · PM: 14:30–23:00")
+            val ts = listOf("AM", "PM").map { t -> t to hist.filter { it.turno == t } }.filter { it.second.isNotEmpty() }
+            tabla(h, listOf(Col("Turno", 115f), Col("Comandas", 80f, true), Col("Promedio", 100f, true),
+                Col("Fuera de tiempo", 100f, true), Col("Encargados", 120f)),
+                ts.map { (t, v) -> listOf(t, v.size.toString(), mmss(v.map { it.min }.average()),
+                    "${v.count { it.min >= ambar } * 100 / v.size}%", v.mapNotNull { it.enc }.distinct().joinToString(", ")) },
+                ts.map { (_, v) -> color(v.map { it.min }.average()) })
+        }
+
         // ---------------------------------------------------------------- encargados
         val porEnc = hist.groupBy { it.enc ?: "Sin turno" }
         if (porEnc.size >= 1) {
@@ -228,9 +245,9 @@ object Reporte {
 
         // ---------------------------------------------------------------- detalle
         titulo(h, "Tiempo por comanda", "${hist.size} comandas en orden de llegada")
-        tabla(h, listOf(Col("#", 34f), Col("Mesa", 52f), Col("Entró", 44f), Col("Listo", 44f), Col("Tiempo", 52f, true),
-            Col("Encargado", 80f), Col("Productos", 209f)),
-            hist.map { hh -> listOf(hh.id.toString(), hh.mesa ?: "-", hhmm(hh.entro), hhmm(hh.listo), mmss(hh.min),
+        tabla(h, listOf(Col("#", 30f), Col("Mesa", 46f), Col("Turno", 40f), Col("Entró", 42f), Col("Listo", 42f),
+            Col("Tiempo", 50f, true), Col("Encargado", 78f), Col("Productos", 187f)),
+            hist.map { hh -> listOf(hh.id.toString(), hh.mesa ?: "-", hh.turno, hhmm(hh.entro), hhmm(hh.listo), mmss(hh.min),
                 hh.enc ?: "-", hh.prods.joinToString(", ") { "${it.first} ${it.second}" }) },
             hist.map { color(it.min) })
 
