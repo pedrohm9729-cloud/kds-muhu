@@ -166,8 +166,13 @@ function vTiempos(){
  return kp+tEnc+ajustes()+`<div class="grid2">${tabla("Por producto","Producto",agrupar(h=>h.prods.map(x=>x[1])))}${tabla("Por mozo","Mozo",agrupar(h=>[h.mozo||"—"]))}</div>
  <h3>Detalle por comanda</h3><div class="tbl"><table><tr><th>#</th><th>Mesa</th><th>Encargado</th><th>Mozo</th><th>Entró</th><th>Listo</th><th>Tiempo</th><th>Productos</th></tr>${det}</table></div>`}
 
-function ajustes(){const and=!!window.Android;
- return `<h3>Ajustes</h3><div class="aj"><label>Verde hasta <input id="semV" type="number" min="1" max="60" value="${est.verde}"> min</label>
+let repF=null;
+function hoyLocal(){const d=new Date(Date.now()+desfase*1000);return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}
+function ajustes(){const and=!!window.Android;if(!repF)repF=hoyLocal();
+ return `<h3>Reporte del servicio</h3><div class="aj"><label>Fecha <input id="repF" type="date" value="${repF}" style="width:auto"></label>
+ <button class="b" id="btnRep">📄 ${and?"Compartir reporte PDF":"Descargar reporte PDF"}</button>
+ <span class="sub">Comandas, tiempo de cada una, promedio, producto que más demoró y resultado por encargado. Listo para enviar al grupo de cocina.</span></div>
+ <h3>Ajustes</h3><div class="aj"><label>Verde hasta <input id="semV" type="number" min="1" max="60" value="${est.verde}"> min</label>
  <label>Rojo desde <input id="semA" type="number" min="2" max="120" value="${est.ambar}"> min</label>
  <button class="b" id="btnSem">Guardar semáforo</button>
  <span class="sub">IP para Wally: <b>${esc(est.ip||"–")}</b> · puerto 9100 · modelo BIENEX E802</span>
@@ -198,9 +203,11 @@ $("btnTurno").onclick=()=>{vista="cocina";location.hash="cocina";pintar();abrirC
 $("btnRec").onclick=()=>post("recuperar");
 $("btnPrueba").onclick=()=>post("simular");
 $("btnRecargar").onclick=()=>location.reload();
+$("vista").addEventListener("change",e=>{if(e.target.id==="repF")repF=e.target.value});
 $("vista").addEventListener("click",e=>{const t=e.target;
  if(t.id==="btnSem"){post("config",{verde:+$("semV").value,ambar:+$("semA").value}).then(r=>{if(!r.ok)alertar("El rojo debe ser mayor que el verde")})}
  if(t.id==="btnInicio"&&window.Android)Android.elegirInicio();
+ if(t.id==="btnRep"){repF=$("repF").value||hoyLocal();if(window.Android)Android.reportePdf(repF);else location.href="/reporte.pdf?fecha="+repF}
  if(t.id==="btnAjAnd"&&window.Android)Android.abrirAjustes()});
 function alertar(m){const d=document.createElement("div");d.className="toast";d.textContent=m;document.body.appendChild(d);setTimeout(()=>d.remove(),3000)}
 

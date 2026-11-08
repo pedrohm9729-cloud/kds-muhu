@@ -159,6 +159,11 @@ class ServidorWeb(private val estado: Estado, private val pagina: String) {
                     else responder(out, 404, "text/plain; charset=utf-8", "Aún no hay historial".toByteArray())
                 }
                 metodo == "GET" && ruta == "/eventos" -> eventos(cx, out)
+                metodo == "GET" && ruta == "/reporte.pdf" -> {
+                    val dia = Regex("fecha=(\\d{4}-\\d{2}-\\d{2})").find(partes[1])?.groupValues?.get(1) ?: estado.hoy()
+                    responder(out, 200, "application/pdf", Reporte.generar(estado, dia),
+                        "Content-Disposition: attachment; filename=\"reporte_cocina_$dia.pdf\"\r\n")
+                }
                 metodo == "POST" && ruta == "/accion" -> {
                     val cuerpo = ByteArray(largo.coerceIn(0, 65536))
                     var leido = 0

@@ -115,26 +115,40 @@ class Estado(private val dir: File) {
     private fun fecha(t: Double) = fFecha.format(Date((t * 1000).toLong()))
     private fun hhmmss(t: Double) = fHora.format(Date((t * 1000).toLong()))
 
-    private fun cargarHistHoy() {
+    fun hoy(): String = fecha(ahora())
+
+    /** Comandas despachadas en un día (yyyy-MM-dd), leídas del historial. Si una se recuperó y
+     *  volvió a despachar, cuenta la última vez. */
+    fun histDe(dia: String): List<Hist> {
+        val porId = LinkedHashMap<Int, Hist>()
         try {
-            if (!archHist.exists()) return
-            val filas = archHist.readLines(Charsets.UTF_8)
-            if (filas.isEmpty() || filas[0].trimStart('﻿').split(";") != cols) {
-                archHist.renameTo(File(dir, "historial_anterior.csv")); return
-            }
-            val hoy = fecha(ahora())
+            if (!archHist.exists()) return emptyList()
             val f = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
-            for (fila in filas.drop(1)) {
+            for (fila in archHist.readLines(Charsets.UTF_8).drop(1)) {
                 val r = fila.split(";")
-                if (r.size < 11 || r[1] != hoy) continue
+                if (r.size < 11 || r[1] != dia) continue
                 val ent = (f.parse("${r[1]} ${r[7]}")?.time ?: continue) / 1000.0
                 val lis = (f.parse("${r[1]} ${r[8]}")?.time ?: continue) / 1000.0
                 val prods = r[10].split(" | ").mapNotNull { p ->
                     Parser.ITEM.find(p.trim())?.let { it.groupValues[1] to it.groupValues[2] }
                 }
-                hist.add(Hist(r[0].toIntOrNull() ?: 0, r[2], r[6], r[5].ifEmpty { null }, ent, lis,
-                    r[9].toDoubleOrNull() ?: 0.0, prods))
+                val id = r[0].toIntOrNull() ?: 0
+                porId.remove(id)
+                porId[id] = Hist(id, r[2].ifEmpty { null }, r[6].ifEmpty { null }, r[5].ifEmpty { null },
+                    ent, lis, r[9].toDoubleOrNull() ?: 0.0, prods)
             }
+        } catch (_: Exception) { }
+        return porId.values.toList()
+    }
+
+    private fun cargarHistHoy() {
+        try {
+            if (!archHist.exists()) return
+            val cab = archHist.bufferedReader(Charsets.UTF_8).use { it.readLine() } ?: return
+            if (cab.trimStart('\uFEFF').split(";") != cols) {
+                archHist.renameTo(File(dir, "historial_anterior.csv")); return
+            }
+            hist.addAll(histDe(fecha(ahora())))
         } catch (_: Exception) { }
     }
 

@@ -20,6 +20,10 @@ import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.Toast
+import androidx.core.content.FileProvider
+import java.io.File
+import kotlin.concurrent.thread
 
 /** Pantalla de cocina a pantalla completa. Nunca se apaga la pantalla. */
 class MainActivity : Activity() {
@@ -111,6 +115,27 @@ class MainActivity : Activity() {
             runOnUiThread {
                 try { startActivity(Intent(Settings.ACTION_HOME_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
                 catch (_: Exception) { startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+            }
+        }
+        @JavascriptInterface fun reportePdf(dia: String) {
+            val e = KdsService.estado ?: return
+            val fecha = if (Regex("\\d{4}-\\d{2}-\\d{2}").matches(dia)) dia else e.hoy()
+            thread {
+                try {
+                    val dir = File(cacheDir, "reportes").apply { mkdirs() }
+                    val f = File(dir, "reporte_cocina_$fecha.pdf")
+                    f.writeBytes(Reporte.generar(e, fecha))
+                    val uri = FileProvider.getUriForFile(this@MainActivity, "pe.muhu.kds.archivos", f)
+                    val envio = Intent(Intent.ACTION_SEND).apply {
+                        type = "application/pdf"
+                        putExtra(Intent.EXTRA_STREAM, uri)
+                        putExtra(Intent.EXTRA_TEXT, "Reporte de cocina Muhu · $fecha")
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    runOnUiThread { startActivity(Intent.createChooser(envio, "Compartir reporte")) }
+                } catch (ex: Exception) {
+                    runOnUiThread { Toast.makeText(this@MainActivity, "No se pudo crear el reporte: ${ex.message}", Toast.LENGTH_LONG).show() }
+                }
             }
         }
         @JavascriptInterface fun recargar() { runOnUiThread { web.loadUrl(URL) } }
