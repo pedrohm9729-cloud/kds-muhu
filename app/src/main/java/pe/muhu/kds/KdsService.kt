@@ -64,6 +64,7 @@ class KdsService : Service() {
             val e = Estado(filesDir)
             e.ip = ipLocal()
             e.alEvento = { ev -> sonar(ev) }
+            e.sync.iniciar()
             estado = e
             val pagina = assets.open("kds.html").bufferedReader(Charsets.UTF_8).readText()
             impresora = ServidorImpresora(e, File(filesDir, "capturas")).also { it.iniciar() }

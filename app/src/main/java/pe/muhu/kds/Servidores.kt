@@ -177,7 +177,8 @@ class ServidorWeb(private val estado: Estado, private val pagina: String) {
                         if (d.has("idx") && !d.isNull("idx")) d.optInt("idx") else null,
                         if (d.isNull("nombre")) null else d.optString("nombre"),
                         if (d.has("verde")) d.optInt("verde") else null,
-                        if (d.has("ambar")) d.optInt("ambar") else null)
+                        if (d.has("ambar")) d.optInt("ambar") else null,
+                        d.optString("url"), d.optString("clave"))
                     responder(out, if (ok) 200 else 400, "application/json", "{\"ok\": $ok}".toByteArray())
                 }
                 else -> responder(out, 404, "text/plain; charset=utf-8", "No encontrado".toByteArray())

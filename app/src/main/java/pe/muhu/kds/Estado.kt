@@ -48,7 +48,12 @@ class Estado(private val dir: File) {
     private val fFecha = SimpleDateFormat("yyyy-MM-dd", Locale.US)
     private val fHora = SimpleDateFormat("HH:mm:ss", Locale.US)
 
-    init { cargar(); cargarHistHoy() }
+    val sync = Sync(dir)
+
+    init {
+        cargar(); cargarHistHoy()
+        sync.alCambiar = { synchronized(lock) { cambio("estado") } }
+    }
 
     private fun ahora() = System.currentTimeMillis() / 1000.0
 
@@ -159,6 +164,8 @@ class Estado(private val dir: File) {
         val prods = c.items.filter { !it.cancelado }.map { it.cant to it.producto }
         val mins = (lista - c.recibida) / 60
         hist.add(Hist(c.id, c.mesa, c.mozo, encargado, c.recibida, lista, mins, prods))
+        sync.encolar(sync.fila(c.id, fecha(c.recibida), c.mesa, c.zona, c.titulo, encargado, c.mozo,
+            hhmmss(c.recibida), hhmmss(lista), mins, prods))
         try {
             val nuevo = !archHist.exists()
             val linea = listOf(c.id.toString(), fecha(c.recibida), csv(c.mesa), csv(c.zona), csv(c.titulo),
@@ -177,6 +184,10 @@ class Estado(private val dir: File) {
         JSONObject().apply {
             put("evento", evento); put("ahora", ahora()); put("verde", verde); put("ambar", ambar)
             put("encargado", encargado.j()); put("turno_desde", turnoDesde.j()); put("ip", ip)
+            put("sync", JSONObject().apply {
+                put("activo", sync.activo); put("pendientes", sync.pendientes())
+                put("ultimo_ok", sync.ultimoOk.j()); put("error", sync.error.j())
+            })
             put("comandas", JSONArray().apply { comandas.forEach { put(comandaJ(it)) } })
             put("hist", JSONArray().apply { hist.filter { it.listo >= hoy0 }.forEach { put(histJ(it)) } })
         }.toString()
@@ -217,7 +228,8 @@ class Estado(private val dir: File) {
         c.id
     }
 
-    fun accion(a: String, id: Int?, idx: Int?, nombre: String?, v: Int?, am: Int?): Boolean = synchronized(lock) {
+    fun accion(a: String, id: Int?, idx: Int?, nombre: String?, v: Int?, am: Int?,
+               url: String? = null, clave: String? = null): Boolean = synchronized(lock) {
         val c = comandas.firstOrNull { it.id == id }
         val evento: String
         when {
@@ -227,6 +239,12 @@ class Estado(private val dir: File) {
                 if (n != encargado) { encargado = n; turnoDesde = ahora() }
                 evento = "turno"
             }
+            a == "sync_config" -> {
+                if (!sync.configurar(url ?: "", clave ?: "")) return false
+                if (sync.activo) { sync.encolarHistorial(archHist); sync.enviarAhora() }
+                evento = "estado"
+            }
+            a == "sync_ahora" -> { sync.enviarAhora(); evento = "estado" }
             a == "config" -> {
                 val nv = v ?: return false; val na = am ?: return false
                 if (nv < 1 || na <= nv || na > 120) return false
