@@ -281,6 +281,15 @@ class Estado(private val dir: File) {
         try { alEvento?.invoke(evento, af) } catch (_: Exception) { }
     }
 
+    /** Comandas que la cocina aún no termina y ya pasaron a rojo (≥ ambar min). */
+    fun atrasadasCocina(): List<Int> = synchronized(lock) {
+        val lim = ahora() - ambar * 60
+        comandas.filter { c ->
+            c.estado == "abierta" && c.recibida <= lim && c.items.any { !it.cancelado } &&
+                (!estaciones || ("cocina" in estacionesDe(c) && "cocina" !in c.listas))
+        }.map { it.id }
+    }
+
     // --------------------------------------------------------------- lógica
     /** Si todas las estaciones de la comanda terminaron, queda lista. */
     private fun revisarLista(c: Comanda): Boolean {

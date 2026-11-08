@@ -68,6 +68,18 @@ class KdsService : Service() {
             impresora = ServidorImpresora(e, File(filesDir, "capturas")).also { it.iniciar() }
             impresoraBarra = ServidorImpresora(e, File(filesDir, "capturas"), PUERTO_BARRA, barra = true).also { it.iniciar() }
             web = ServidorWeb(e, pagina).also { it.iniciar() }
+            // Aviso fuerte una sola vez cuando una comanda pasa a rojo
+            thread(isDaemon = true) {
+                val avisadas = mutableSetOf<Int>()
+                while (true) {
+                    try {
+                        val at = e.atrasadasCocina()
+                        avisadas.retainAll(at.toSet())
+                        if (at.any { it !in avisadas }) { avisadas.addAll(at); Sonido.sonar(this, "retraso") }
+                    } catch (_: Exception) { }
+                    Thread.sleep(10000)
+                }
+            }
             // La IP puede cambiar si el WiFi se reconecta
             thread(isDaemon = true) {
                 while (true) { Thread.sleep(30000); e.ip = ipLocal() }

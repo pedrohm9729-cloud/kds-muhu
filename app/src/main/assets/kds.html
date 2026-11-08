@@ -180,9 +180,10 @@ function pintarPanel(){
  const tg=(k,t)=>`<button data-k="${k}" data-v="tg" class="${pref[k]?"on":""}">${pref[k]?"✓ ":""}${t}</button>`;
  $("opOtros").innerHTML=vista==="cliente"?tg("soloLlevar","Solo para llevar y Rappi"):tg("total","Total por preparar")+tg("compacto","Modo compacto")}
 function post(accion,extra){return fetch("/accion",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({accion,...extra})})}
-function bip(t){if(window.Android&&vista==="cocina")return; /* en la tablet suena el sonido nativo */ if(!ctx)return;if(ctx.state==="suspended")ctx.resume();const N={nueva:[880,1175],listo:[660,880,1320],anulacion:[440,330,440],cambio:[988,988]}[t]||[700];
- let s=ctx.currentTime;for(const f of N){const o=ctx.createOscillator(),g=ctx.createGain();o.type="square";o.frequency.value=f;
- g.gain.setValueAtTime(.14,s);g.gain.exponentialRampToValueAtTime(.001,s+.2);o.connect(g).connect(ctx.destination);o.start(s);o.stop(s+.21);s+=.24}}
+function bip(t){if(window.Android&&vista==="cocina")return; /* en la tablet suena el sonido nativo */ if(!ctx)return;if(ctx.state==="suspended")ctx.resume();
+ const N={nueva:[[1319,.26],[988,.6]],listo:[[1047,.2],[1319,.2],[1568,.5]],anulacion:[[659,.24],[523,.45]],cambio:[[1175,.18],[1175,.3]],retraso:[[1760,.15],[0,.07],[1760,.15],[0,.07],[1760,.26]]}[t]||[[880,.3]];
+ const duro=t==="retraso";let s=ctx.currentTime;for(const [f,d] of N){if(f){const o=ctx.createOscillator(),g=ctx.createGain();o.type=duro?"square":"sine";o.frequency.value=f;
+ g.gain.setValueAtTime(duro?.12:.3,s);g.gain.exponentialRampToValueAtTime(.001,s+d+(duro?0:.25));o.connect(g).connect(ctx.destination);o.start(s);o.stop(s+d+.26)}s+=d}}
 function audio(){if(ctx)return;try{ctx=new (window.AudioContext||window.webkitAudioContext)()}catch(e){}
  try{navigator.wakeLock&&navigator.wakeLock.request("screen").catch(()=>{})}catch(e){}}
 
@@ -314,9 +315,11 @@ function vAjustes(){const and=!!window.Android,ip=esc(est.ip||"–");
  return `<h3>Conexión con Wally</h3><div class="aj"><span class="sub" style="margin:0">En Wally: impresora <b>BIENEX E802</b>, ancho 48, IP <code>${ip}</code>, puerto <code>9100</code>.</span></div>
  ${estacHtml()}
  ${palHtml()}
- ${and?`<h3>Sonido de pedidos</h3><div class="aj"><div class="filtroT">${["Normal","Fuerte","Máximo"].map((t,i)=>`<button data-vol="${i}" class="${Android.volumen()===i?"on":""}">${t}</button>`).join("")}</div>
- <button class="b" id="btnSon">🔊 Probar sonido</button>
- <span class="sub">Suena por el canal de alarma y sube el volumen sola en cada pedido. Máximo repite el aviso 3 veces.</span></div>`:""}
+ ${and?`<h3>Sonido</h3><div class="aj">
+ <h4>Pedido nuevo</h4><div class="filtroT" style="margin:0"><button data-snuevo="1" class="${Android.sonidoNuevo()?"on":""}">🔔 Campanita suave</button><button data-snuevo="0" class="${!Android.sonidoNuevo()?"on":""}">Sin sonido</button></div>
+ <h4>Volumen</h4><div class="filtroT" style="margin:0">${["Normal","Fuerte","Máximo"].map((t,i)=>`<button data-vol="${i}" class="${Android.volumen()===i?"on":""}">${t}</button>`).join("")}</div>
+ <h4>Probar</h4><button class="b" data-probar="nueva">🔔 Pedido nuevo</button><button class="b" data-probar="cambio">Cambio</button><button class="b" data-probar="anulacion">Anulación</button><button class="b" data-probar="retraso">⚠️ Retraso</button>
+ <span class="sub">El aviso fuerte de <b>retraso</b> suena una sola vez cuando una comanda llega a ${est.ambar} min (rojo).</span></div>`:""}
  <h3>Semáforo de tiempo</h3><div class="aj"><label>Verde hasta <input id="semV" type="number" min="1" max="60" value="${est.verde}"> min</label>
  <label>Rojo desde <input id="semA" type="number" min="2" max="120" value="${est.ambar}"> min</label>
  <button class="b" id="btnSem">Guardar semáforo</button></div>
@@ -382,7 +385,8 @@ $("vista").addEventListener("click",e=>{const t=e.target;
  if(t.id==="palAdd"){palE().push({p:"",c:"azul"});pintar()}
  if(t.dataset&&t.dataset.pdel!==undefined){palE().splice(+t.dataset.pdel,1);pintar()}
  if(t.id==="palOk"){const L=palE().filter(r=>r.p.trim());post("palabras",{url:JSON.stringify(L)}).then(r=>{if(r.ok){palEd=null;alertar("Palabras guardadas")}else alertar("No se pudo guardar")})}
- if(t.id==="btnSon"&&window.Android)Android.probarSonido();
+ if(t.dataset&&t.dataset.probar&&window.Android)Android.probarSonido(t.dataset.probar);
+ if(t.dataset&&t.dataset.snuevo!==undefined&&window.Android){Android.ponerSonidoNuevo(t.dataset.snuevo==="1");document.querySelectorAll("[data-snuevo]").forEach(b=>b.classList.toggle("on",b===t))}
  if(t.dataset&&t.dataset.vol!==undefined&&window.Android){Android.ponerVolumen(+t.dataset.vol);document.querySelectorAll("[data-vol]").forEach(b=>b.classList.toggle("on",b===t))}
  if(t.id==="btnSync"){post("sync_config",{url:sUrl.trim(),clave:sClave.trim()}).then(r=>{if(!r.ok)alertar("La URL debe empezar con https://script.google.com/")})}
  if(t.id==="btnSyncYa")post("sync_ahora",{});
@@ -413,6 +417,11 @@ function conectar(){const es=new EventSource("/eventos");
   const af=d.afecta||[],st=deEst(vista),mia=!st||!af.length||af.includes(st);
   const suena=(vista==="cocina"||vista==="barra")?(mia?["nueva","cambio","anulacion"]:[]):vista==="caja"?["listo","anulacion"]:vista==="cliente"?["listo"]:[];
   if(suena.includes(d.evento))bip(d.evento)}}
-ruta();conectar();setInterval(()=>{if(vista!=="tiempos"&&vista!=="ajustes")pintar()},1000);
+const avisadas=new Set();
+function revisarRetraso(){if(!listo||(window.Android&&vista==="cocina"))return;const st=deEst(vista);if(!((vista==="barra"&&est.estaciones)||(vista==="cocina"&&!window.Android)))return;
+ let nuevo=false;for(const c of est.comandas){const ab=st?abiertaEn(c,st)&&c.items.some(i=>!i.cancelado&&(i.est||"cocina")===st):c.estado==="abierta";
+  if(ab&&(ahora()-c.recibida_ts)/60>=est.ambar&&!avisadas.has(c.id)){avisadas.add(c.id);nuevo=true}}
+ if(nuevo)bip("retraso")}
+ruta();conectar();setInterval(()=>{if(vista!=="tiempos"&&vista!=="ajustes")pintar();revisarRetraso()},1000);
 })();
 </script></body></html>

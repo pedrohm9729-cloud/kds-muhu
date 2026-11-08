@@ -140,8 +140,10 @@ class MainActivity : Activity() {
             }
         }
         @JavascriptInterface fun volumen(): Int = Sonido.nivel(this@MainActivity)
-        @JavascriptInterface fun ponerVolumen(n: Int) { Sonido.ponerNivel(this@MainActivity, n); Sonido.sonar(this@MainActivity, "prueba") }
-        @JavascriptInterface fun probarSonido() { Sonido.sonar(this@MainActivity, "prueba") }
+        @JavascriptInterface fun ponerVolumen(n: Int) { Sonido.ponerNivel(this@MainActivity, n); Sonido.sonar(this@MainActivity, "nueva", true) }
+        @JavascriptInterface fun probarSonido(tipo: String) { Sonido.sonar(this@MainActivity, tipo, true) }
+        @JavascriptInterface fun sonidoNuevo(): Boolean = Sonido.nuevoActivo(this@MainActivity)
+        @JavascriptInterface fun ponerSonidoNuevo(b: Boolean) { Sonido.ponerNuevo(this@MainActivity, b); if (b) Sonido.sonar(this@MainActivity, "nueva", true) }
         @JavascriptInterface fun recargar() { runOnUiThread { web.loadUrl(URL) } }
     }
 }
