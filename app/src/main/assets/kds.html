@@ -111,8 +111,6 @@ h3{font:800 16px var(--f-disp);letter-spacing:1.4px;text-transform:uppercase;col
   <span class="chip">Abiertas <b id="nAb">0</b></span>
   <span class="chip oc">Promedio hoy <b id="prom">–</b></span>
   <button class="b" id="btnRec" title="Devuelve a pantalla la última comanda marcada como lista">↩ Recuperar última</button>
-  <button class="b oc" id="btnPrueba" title="Crea una comanda de prueba">＋ Prueba</button>
-  <a class="b oc" href="/historial.csv">Excel</a>
   <button class="b oc" id="btnRecargar" title="Recargar pantalla">⟳</button>
 </div></div></header>
 <main class="wrap"><div id="vista"></div></main>
@@ -241,7 +239,7 @@ $("fTurno").onsubmit=e=>{e.preventDefault();audio();
 $("btnSeguir").onclick=()=>{audio();$("capa").hidden=true};
 $("btnTurno").onclick=()=>{vista="cocina";location.hash="cocina";pintar();abrirCapa()};
 $("btnRec").onclick=()=>post("recuperar");
-$("btnPrueba").onclick=()=>post("simular");
+
 $("btnRecargar").onclick=()=>location.reload();
 $("vista").addEventListener("change",e=>{if(e.target.id==="repF")repF=e.target.value;if(e.target.id==="repT")repT=e.target.value});
 $("vista").addEventListener("input",e=>{if(e.target.id==="sUrl")sUrl=e.target.value;if(e.target.id==="sClave")sClave=e.target.value});
