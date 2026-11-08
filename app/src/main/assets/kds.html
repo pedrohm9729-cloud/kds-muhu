@@ -59,6 +59,7 @@ li.cancel .p,li.cancel .m{text-decoration:line-through;color:#ff9a95}
 .acc{padding:0 10px 12px;display:flex}
 .pw{font-weight:800}li.cancel .pw{color:inherit!important}
 .et{font:800 15px/1 var(--f-disp);letter-spacing:1px;padding:4px 8px 3px;border-radius:6px;margin-left:8px;vertical-align:4px;display:inline-block;background:#f3eee6;color:#14120f}
+.et.adic{background:var(--azul);color:#fff}
 .et.rappi{background:#14120f;color:#ff6a47;box-shadow:inset 0 0 0 2px #ff6a47}
 #menu{position:fixed;top:60px;right:16px;z-index:25;background:var(--rail);border:1px solid var(--linea);border-radius:14px;padding:8px;display:flex;flex-direction:column;gap:4px;min-width:230px;box-shadow:0 10px 30px #0009}
 #menu button{background:none;text-align:left;padding:11px 12px;font-weight:600;font-size:16px}#menu button:hover{background:var(--ticket)}
@@ -219,7 +220,7 @@ function tarjeta(c,modo){
  const reloj=!abierta?"LISTO "+mmss(fin-c.recibida_ts):mmss(t-c.recibida_ts);
  const todo=norm([c.mesa,c.zona,c.titulo,...c.items.flatMap(i=>[i.producto,...(i.mods||[])])].join(" "));
  const rappi=todo.includes("rappi"),llevar=!rappi&&todo.includes("llevar");
- const et=rappi?'<span class="et rappi">RAPPI</span>':llevar?'<span class="et">LLEVAR</span>':"";
+ const et=(rappi?'<span class="et rappi">RAPPI</span>':llevar?'<span class="et">LLEVAR</span>':"")+(c.adicional?'<span class="et adic">ADICIONAL</span>':"");
  const nom=c.mesa&&c.mesa!=="0"?"Mesa "+esc(c.mesa):"Pedido #"+c.id,caja=modo==="caja";
  return `<div class="card ${col}${flash.has(c.id)?" flash":""}"><div class="top"><span class="mesa">${nom}${et}${caja&&c.zona&&!et?` <small>· ${esc(c.zona)}</small>`:""}</span><span class="reloj">${reloj}</span></div>${caja?extra:""}
  ${c.titulo?`<div class="titulo">📝 ${esc(c.titulo)}</div>`:""}${caja?`<div class="meta">${esc(c.mozo||"")} · <b>${hhmm(c.recibida_ts).slice(0,5)}</b></div>`:""}<ul>${items}</ul>${acc}</div>`}

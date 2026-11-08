@@ -18,6 +18,8 @@ class Comanda(
     var recibida: Double, var actualizada: Double, var lista: Double? = null,
     /** Hora en que cada estación terminó su parte: {"cocina": ts, "barra": ts} */
     val listas: MutableMap<String, Double> = mutableMapOf(),
+    /** Pedido extra de una mesa que ya tenía comanda (llegó pasados los 2 min). */
+    val adicional: Boolean = false,
 )
 
 class Hist(
@@ -119,6 +121,7 @@ class Estado(private val dir: File) {
         put("items", JSONArray().apply { c.items.forEach { put(itemJ(it)) } })
         put("recibida_ts", c.recibida); put("actualizada_ts", c.actualizada); put("lista_ts", c.lista.j())
         put("listas", JSONObject().apply { c.listas.forEach { (k, v) -> put(k, v) } })
+        put("adicional", c.adicional)
     }
 
     private fun histJ(h: Hist) = JSONObject().apply {
@@ -154,7 +157,7 @@ class Estado(private val dir: File) {
                 val c = Comanda(o.getInt("id"), o.str("mesa"), o.str("zona"), o.str("titulo"),
                     o.str("mozo"), o.str("hora"), MutableList(its.length()) { itemDe(its.getJSONObject(it)) },
                     o.optString("estado", "abierta"), o.getDouble("recibida_ts"), o.getDouble("actualizada_ts"),
-                    if (o.isNull("lista_ts")) null else o.getDouble("lista_ts"))
+                    if (o.isNull("lista_ts")) null else o.getDouble("lista_ts"), adicional = o.optBoolean("adicional"))
                 o.optJSONObject("listas")?.let { l -> l.keys().forEach { c.listas[it] = l.getDouble(it) } }
                 comandas.add(c)
             }
@@ -305,39 +308,68 @@ class Estado(private val dir: File) {
      * Nueva comanda. [desdeBarra] = llegó por la impresora "Barra" (puerto 9101): todo va a barra.
      * Si no, cada producto va a la estación que indique la lista de productos de barra.
      */
+    /** Ventana para juntar adicionales en la misma tarjeta: 2 min desde que entró la comanda. */
+    private val VENTANA = 120.0
+
+    /** ¿Es el mismo pedido? Misma mesa y zona; en la mesa 0 (para llevar) también el mismo título. */
+    private fun mismaMesa(c: Comanda, p: Parseada) = p.mesa != null && c.mesa == p.mesa && c.zona == p.zona &&
+        (p.mesa != "0" || c.titulo == p.titulo)
+
+    /**
+     * Nueva comanda. [desdeBarra] = llegó por la impresora "Barra" (puerto 9101): todo va a barra.
+     * Si no, cada producto va a la estación que indique la lista de productos de barra.
+     * Adicionales de la misma mesa: dentro de 2 min se suman a la misma tarjeta (mismo tiempo);
+     * después, son una tarjeta nueva con su propio tiempo. Las anulaciones siempre tachan donde esté el producto.
+     */
     fun nuevaComanda(p: Parseada, desdeBarra: Boolean = false): Int = synchronized(lock) {
         val t = ahora()
         (p.items + p.cancelados).forEach { it.est = if (estaciones && desdeBarra) "barra" else estacionDe(it.producto) }
         val af = (p.items + p.cancelados).map { it.est }.toSet()
-        val abierta = if (p.mesa != null) comandas.firstOrNull {
-            it.estado == "abierta" && it.mesa == p.mesa && it.zona == p.zona
-        } else null
-        if (abierta != null && (p.items.isNotEmpty() || p.cancelados.isNotEmpty())) {
-            for (cx in p.cancelados) {
-                val cand = abierta.items.filter { !it.cancelado && it.producto == cx.producto }
-                val obj = cand.firstOrNull { it.mods == cx.mods } ?: cand.firstOrNull()
-                if (obj != null) obj.cancelado = true
-                else abierta.items.add(cx.also { it.cancelado = true })
-            }
-            // Wally manda un ticket por impresora: la parte de la otra estación que llega enseguida no es un cambio
-            val previas = abierta.items.filter { !it.cancelado && it !in p.items }.map { it.est }.toSet()
-            val parte = p.cancelados.isEmpty() && p.items.isNotEmpty() && p.items.none { it.est in previas } &&
-                t - abierta.recibida < 120
-            val marca = if (parte) null else if (p.cancelados.isNotEmpty()) "cambio" else "nuevo"
-            p.items.forEach { abierta.items.add(it.also { i -> i.marca = marca }) }
-            p.items.forEach { abierta.listas.remove(it.est) }          // esa estación vuelve a tener trabajo
-            abierta.actualizada = t
-            if (revisarLista(abierta)) { cambio("listo", af); return abierta.id }
-            cambio(if (parte) "nueva" else if (p.cancelados.isNotEmpty() && p.items.isEmpty()) "anulacion" else "cambio", af)
-            return abierta.id
+        val abiertas = comandas.filter { it.estado == "abierta" && mismaMesa(it, p) }.sortedByDescending { it.recibida }
+
+        // 1) Anulaciones: se tachan en la tarjeta donde está el producto (la más reciente primero)
+        val tocadas = mutableSetOf<Comanda>()
+        val sinMatch = mutableListOf<Item>()
+        for (cx in p.cancelados) {
+            val cand = abiertas.flatMap { c -> c.items.filter { !it.cancelado && it.producto == cx.producto }.map { c to it } }
+            val obj = cand.firstOrNull { it.second.mods == cx.mods } ?: cand.firstOrNull()
+            if (obj != null) { obj.second.cancelado = true; tocadas += obj.first } else sinMatch += cx.also { it.cancelado = true }
         }
+        val reciente = abiertas.firstOrNull()
+        if (p.items.isEmpty() && (tocadas.isNotEmpty() || reciente != null)) {
+            val destino = tocadas.firstOrNull() ?: reciente!!
+            destino.items.addAll(sinMatch)
+            var listo = false
+            (tocadas + destino).forEach { it.actualizada = t; if (revisarLista(it)) listo = true }
+            cambio(if (listo) "listo" else "anulacion", af)
+            return destino.id
+        }
+
+        // 2) Productos dentro de los 2 min: misma tarjeta, mismo tiempo
+        if (reciente != null && p.items.isNotEmpty() && t - reciente.recibida <= VENTANA) {
+            reciente.items.addAll(sinMatch)
+            // Wally manda un ticket por impresora: la parte de la otra estación que llega enseguida no es un cambio
+            val previas = reciente.items.filter { !it.cancelado }.map { it.est }.toSet()
+            val parte = p.cancelados.isEmpty() && p.items.none { it.est in previas }
+            val marca = if (parte) null else if (p.cancelados.isNotEmpty()) "cambio" else "nuevo"
+            p.items.forEach { reciente.items.add(it.also { i -> i.marca = marca }) }
+            p.items.forEach { reciente.listas.remove(it.est) }          // esa estación vuelve a tener trabajo
+            reciente.actualizada = t
+            tocadas.forEach { it.actualizada = t }
+            cambio(if (parte) "nueva" else "cambio", af)
+            return reciente.id
+        }
+
+        // 3) Pedido nuevo, o adicional pasados los 2 min: tarjeta propia con su propio tiempo
+        val adicional = p.items.isNotEmpty() && comandas.any { mismaMesa(it, p) }
+        if (p.cancelados.isNotEmpty() && p.items.isNotEmpty()) p.items.forEach { it.marca = "cambio" }
+        tocadas.forEach { it.actualizada = t; revisarLista(it) }
         seq += 1
         val c = Comanda(seq, p.mesa, p.zona, p.titulo, p.mozo, p.hora,
-            (p.items + p.cancelados.onEach { it.cancelado = true }).toMutableList(),
-            recibida = t, actualizada = t)
+            (p.items + sinMatch).toMutableList(), recibida = t, actualizada = t, adicional = adicional)
         comandas.add(c)
         cambio(if (p.items.isNotEmpty()) "nueva" else "anulacion", af)
-        c.id
+        return c.id
     }
 
     fun accion(a: String, id: Int?, idx: Int?, nombre: String?, v: Int?, am: Int?,
