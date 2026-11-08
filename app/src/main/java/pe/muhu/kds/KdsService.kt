@@ -84,7 +84,7 @@ class KdsService : Service() {
         val n = Notification.Builder(this, "kds")
             .setContentTitle("KDS Muhu activo")
             .setContentText("Recibiendo comandas en ${ipLocal()}")
-            .setSmallIcon(R.drawable.ic_kds)
+            .setSmallIcon(R.drawable.ic_notif)
             .setContentIntent(abrir)
             .setOngoing(true)
             .build()

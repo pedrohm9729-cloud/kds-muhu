@@ -15,7 +15,7 @@
         android:allowBackup="false"
         android:icon="@drawable/ic_kds"
         android:roundIcon="@drawable/ic_kds"
-        android:label="KDS Muhu"
+        android:label="MUHU KDS"
         android:usesCleartextTraffic="true"
         android:theme="@style/Tema">
 
