@@ -57,6 +57,15 @@ li.cancel .p,li.cancel .m{text-decoration:line-through;color:#ff9a95}
 .tag{font:700 12px var(--f-txt);padding:2px 7px;border-radius:6px;margin-left:6px;vertical-align:2px;display:inline-block}
 .tag.cambio{background:var(--resalta);color:#1a1410}.tag.nuevo{background:var(--azul);color:#fff}.tag.anul{background:var(--rojo);color:#fff}
 .acc{padding:0 10px 12px;display:flex}
+li.pal{border-left:6px solid var(--pc);background:color-mix(in srgb,var(--pc) 15%,var(--ticket))}li.pal .p{color:var(--pc)}
+li.pal.cancel .p{color:#ff9a95}
+.banda{font:800 24px/1 var(--f-disp);letter-spacing:2px;text-align:center;padding:9px 8px}
+.banda.llevar{background:#f3eee6;color:#14120f}
+.banda.rappi{background:repeating-linear-gradient(-45deg,#ff441f 0 14px,#d63516 14px 28px);color:#fff;text-shadow:0 1px 2px #0006}
+.card.rappi{border:3px solid #ff441f!important}
+.card.llevar .p{font-size:24px}.card.llevar .m{font-size:18px}.card.llevar .mesa{font-size:31px}
+@media (min-width:640px){.card.llevar{grid-column:span 2}}
+#palL{flex-basis:100%}.palF{display:flex;gap:6px;align-items:center;margin-bottom:6px}.aj .palF input{width:170px;font-family:var(--f-txt)}.palM{width:20px;height:20px;border-radius:50%;flex:none}
 .listo{flex:1;background:var(--verde);color:#0d1a10;font:800 22px var(--f-disp);letter-spacing:1px;padding:12px}
 .entregado{flex:1;background:var(--azul);color:#fff;font:800 20px var(--f-disp);letter-spacing:1px;padding:11px}
 .kpis{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-bottom:18px}
@@ -131,18 +140,25 @@ function bip(t){if(window.Android&&vista==="cocina")return; /* en la tablet suen
 function audio(){if(ctx)return;try{ctx=new (window.AudioContext||window.webkitAudioContext)()}catch(e){}
  try{navigator.wakeLock&&navigator.wakeLock.request("screen").catch(()=>{})}catch(e){}}
 
+const COLORES={azul:"#4a8fe0",celeste:"#48c6e8",rojo:"#e2504a",verde:"#3fb36b",morado:"#a77de8",rosado:"#f07ab8",naranja:"#f08a3c",amarillo:"#f6cf62"};
+const norm=s=>String(s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
+function colorDe(txt){const n=norm(txt);for(const r of est.palabras||[])if(r.p&&COLORES[r.c]&&n.includes(norm(r.p)))return COLORES[r.c];return null}
 function tarjeta(c,modo){
  const t=ahora(),min=(t-c.recibida_ts)/60;
  const col=c.estado==="lista"?(modo==="caja"?"lista":"lista despachada"):semaf(min);
  const items=c.items.map((it,i)=>{
-  const k=it.cancelado?"cancel":it.hecho?"hecho":"",tap=modo==="cocina"&&c.estado==="abierta"&&!it.cancelado;
+  const pc=colorDe(it.producto+" "+(it.mods||[]).join(" "));
+  const k=(it.cancelado?"cancel":it.hecho?"hecho":"")+(pc?" pal":""),tap=modo==="cocina"&&c.estado==="abierta"&&!it.cancelado;
   const tag=it.cancelado?'<span class="tag anul">ANULADO</span>':it.marca==="cambio"?'<span class="tag cambio">CAMBIO</span>':it.marca==="nuevo"?'<span class="tag nuevo">NUEVO</span>':"";
-  return `<li class="${k}${tap?" tap":""}" ${tap?`data-a="item" data-id="${c.id}" data-i="${i}" role="button" tabindex="0"`:""}><div class="p"><span class="q">${esc(it.cant)}×</span>${esc(it.producto)}${tag}</div>${(it.mods||[]).map(m=>`<div class="m">+ ${esc(m)}</div>`).join("")}</li>`}).join("");
+  return `<li class="${k}${tap?" tap":""}"${pc?` style="--pc:${pc}"`:""} ${tap?`data-a="item" data-id="${c.id}" data-i="${i}" role="button" tabindex="0"`:""}><div class="p"><span class="q">${esc(it.cant)}×</span>${esc(it.producto)}${tag}</div>${(it.mods||[]).map(m=>`<div class="m">+ ${esc(m)}</div>`).join("")}</li>`}).join("");
  let acc="";
  if(modo==="cocina"&&c.estado==="abierta")acc=`<div class="acc"><button class="listo" data-a="listo" data-id="${c.id}">✓ LISTO</button></div>`;
  if(modo==="caja"&&c.estado==="lista")acc=`<div class="acc"><button class="entregado" data-a="entregado" data-id="${c.id}">ENTREGADO</button></div>`;
  const reloj=c.estado==="lista"?"LISTO "+mmss(c.lista_ts-c.recibida_ts):mmss(t-c.recibida_ts);
- return `<div class="card ${col}${flash.has(c.id)?" flash":""}"><div class="top"><span class="mesa">${c.mesa?"Mesa "+esc(c.mesa):"Pedido #"+c.id}${c.zona?` <small>· ${esc(c.zona)}</small>`:""}</span><span class="reloj">${reloj}</span></div>
+ const todo=norm([c.mesa,c.zona,c.titulo,...c.items.flatMap(i=>[i.producto,...(i.mods||[])])].join(" "));
+ const llevar=todo.includes("llevar"),rappi=todo.includes("rappi");
+ const bandas=(rappi?'<div class="banda rappi">🛵 RAPPI</div>':"")+(llevar?'<div class="banda llevar">🥡 PARA LLEVAR</div>':"");
+ return `<div class="card ${col}${llevar?" llevar":""}${rappi?" rappi":""}${flash.has(c.id)?" flash":""}"><div class="top"><span class="mesa">${c.mesa?"Mesa "+esc(c.mesa):"Pedido #"+c.id}${c.zona?` <small>· ${esc(c.zona)}</small>`:""}</span><span class="reloj">${reloj}</span></div>${bandas}
  ${c.titulo?`<div class="titulo">📝 ${esc(c.titulo)}</div>`:""}<div class="meta">${esc(c.mozo||"")} · <b>${hhmm(c.recibida_ts)}</b></div><ul>${items}</ul>${acc}</div>`}
 
 function vTablero(modo){
@@ -194,12 +210,18 @@ function sheetsHtml(){const y=est.sync||{};
  <button class="b" id="btnSync">Guardar y conectar</button>${y.activo?'<button class="b" id="btnSyncYa">Enviar ahora</button>':""}
  <span class="sub">Al conectar se sube también el historial guardado en la tablet. Si se cae el internet, las comandas esperan y se envían solas al volver.</span></div>`}
 function hoyLocal(){const d=new Date(Date.now()+desfase*1000);return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}
+let palEd=null;const palE=()=>palEd||(palEd=JSON.parse(JSON.stringify(est.palabras||[])));
+function palHtml(){const L=palEd||est.palabras||[];
+ return `<h3>Palabras de color</h3><div class="aj"><div id="palL">${L.map((r,i)=>`<div class="palF"><input data-pi="${i}" value="${esc(r.p)}" placeholder="palabra"><select data-pc="${i}">${Object.keys(COLORES).map(k=>`<option ${r.c===k?"selected":""}>${k}</option>`).join("")}</select><span class="palM" style="background:${COLORES[r.c]||"#888"}"></span><button class="b" data-pdel="${i}">✕</button></div>`).join("")}</div>
+ <button class="b" id="palAdd">＋ Agregar palabra</button><button class="b" id="palOk">Guardar palabras</button>
+ <span class="sub">Si el producto o su nota contiene la palabra, se pinta de ese color en cocina. No importan mayúsculas ni tildes: "frapp" sirve para frappé y frappuccino. <b>Para llevar</b> y <b>Rappi</b> se detectan solos.</span></div>`}
 function ajustes(){const and=!!window.Android;if(!repF)repF=hoyLocal();
  return `<h3>Reporte del servicio</h3><div class="aj"><label>Fecha <input id="repF" type="date" value="${repF}" style="width:auto"></label>
  <label>Turno <select id="repT">${[["","Todo el día"],["AM","Turno AM"],["PM","Turno PM"]].map(([v,t])=>`<option value="${v}" ${repT===v?"selected":""}>${t}</option>`).join("")}</select></label>
  <button class="b" id="btnRep">📄 ${and?"Compartir reporte PDF":"Descargar reporte PDF"}</button>
  <span class="sub">Comandas, tiempo de cada una, promedio, producto que más demoró y resultado por encargado. Listo para enviar al grupo de cocina.</span></div>
  ${and?sheetsHtml():""}
+ ${palHtml()}
  ${and?`<h3>Sonido de pedidos</h3><div class="aj"><div class="filtroT">${["Normal","Fuerte","Máximo"].map((t,i)=>`<button data-vol="${i}" class="${Android.volumen()===i?"on":""}">${t}</button>`).join("")}</div>
  <button class="b" id="btnSon">🔊 Probar sonido</button>
  <span class="sub">Suena por el canal de alarma y sube el volumen sola en cada pedido. Máximo repite el aviso 3 veces.</span></div>`:""}
@@ -244,11 +266,16 @@ $("btnTurno").onclick=()=>{vista="cocina";location.hash="cocina";pintar();abrirC
 $("btnRec").onclick=()=>post("recuperar");
 
 $("btnRecargar").onclick=()=>location.reload();
-$("vista").addEventListener("change",e=>{if(e.target.id==="repF")repF=e.target.value;if(e.target.id==="repT")repT=e.target.value});
-$("vista").addEventListener("input",e=>{if(e.target.id==="sUrl")sUrl=e.target.value;if(e.target.id==="sClave")sClave=e.target.value});
+$("vista").addEventListener("change",e=>{if(e.target.dataset.pc!==undefined){palE()[+e.target.dataset.pc].c=e.target.value;pintar()}
+ if(e.target.id==="repF")repF=e.target.value;if(e.target.id==="repT")repT=e.target.value});
+$("vista").addEventListener("input",e=>{if(e.target.dataset.pi!==undefined)palE()[+e.target.dataset.pi].p=e.target.value;
+ if(e.target.id==="sUrl")sUrl=e.target.value;if(e.target.id==="sClave")sClave=e.target.value});
 $("vista").addEventListener("click",e=>{const t=e.target;
  if(t.id==="btnSem"){post("config",{verde:+$("semV").value,ambar:+$("semA").value}).then(r=>{if(!r.ok)alertar("El rojo debe ser mayor que el verde")})}
  if(t.id==="btnInicio"&&window.Android)Android.elegirInicio();
+ if(t.id==="palAdd"){palE().push({p:"",c:"azul"});pintar()}
+ if(t.dataset&&t.dataset.pdel!==undefined){palE().splice(+t.dataset.pdel,1);pintar()}
+ if(t.id==="palOk"){const L=palE().filter(r=>r.p.trim());post("palabras",{url:JSON.stringify(L)}).then(r=>{if(r.ok){palEd=null;alertar("Palabras guardadas")}else alertar("No se pudo guardar")})}
  if(t.id==="btnSon"&&window.Android)Android.probarSonido();
  if(t.dataset&&t.dataset.vol!==undefined&&window.Android){Android.ponerVolumen(+t.dataset.vol);document.querySelectorAll("[data-vol]").forEach(b=>b.classList.toggle("on",b===t))}
  if(t.id==="btnSync"){post("sync_config",{url:sUrl.trim(),clave:sClave.trim()}).then(r=>{if(!r.ok)alertar("La URL debe empezar con https://script.google.com/")})}

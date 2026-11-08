@@ -49,6 +49,8 @@ class Estado(private val dir: File) {
     var encargado: String? = null; private set
     private var turnoDesde: Double? = null
     var turno: String? = null; private set
+    /** Palabras que pintan de color un producto en la cocina: [{"p":"helado","c":"azul"}] */
+    var palabras: JSONArray = JSONArray("""[{"p":"helado","c":"azul"},{"p":"frapp","c":"celeste"},{"p":"alergi","c":"rojo"}]"""); private set
     var verde = 6; private set
     var ambar = 10; private set
     var ip: String = "-"
@@ -106,6 +108,7 @@ class Estado(private val dir: File) {
             turnoDesde = if (d.isNull("turno_desde")) null else d.optDouble("turno_desde")
             turno = d.optString("turno").takeIf { Turnos.valido(it) }
             verde = d.optInt("verde", 6); ambar = d.optInt("ambar", 10)
+            d.optJSONArray("palabras")?.let { palabras = it }
             val arr = d.optJSONArray("comandas") ?: JSONArray()
             for (k in 0 until arr.length()) {
                 val o = arr.getJSONObject(k)
@@ -123,7 +126,7 @@ class Estado(private val dir: File) {
             val d = JSONObject().apply {
                 put("seq", seq); put("encargado", encargado.j()); put("turno_desde", turnoDesde.j())
                 put("turno", turno.j())
-                put("verde", verde); put("ambar", ambar)
+                put("verde", verde); put("ambar", ambar); put("palabras", palabras)
                 put("comandas", JSONArray().apply { comandas.forEach { put(comandaJ(it)) } })
             }
             val tmp = File(dir, "kds_estado.json.tmp")
@@ -207,6 +210,7 @@ class Estado(private val dir: File) {
         }.timeInMillis / 1000.0
         JSONObject().apply {
             put("evento", evento); put("ahora", ahora()); put("verde", verde); put("ambar", ambar)
+            put("palabras", palabras)
             put("encargado", encargado.j()); put("turno_desde", turnoDesde.j()); put("ip", ip)
             put("turno", turno.j())
             put("turnos", JSONObject().apply {
@@ -274,6 +278,16 @@ class Estado(private val dir: File) {
                 evento = "estado"
             }
             a == "sync_ahora" -> { sync.enviarAhora(); evento = "estado" }
+            a == "palabras" -> {
+                val arr = try { JSONArray(url ?: "") } catch (_: Exception) { return false }
+                val limpio = JSONArray()
+                for (k in 0 until minOf(arr.length(), 40)) {
+                    val o = arr.optJSONObject(k) ?: continue
+                    val pal = o.optString("p").trim().take(30); val col = o.optString("c").trim().take(12)
+                    if (pal.isNotEmpty() && col.isNotEmpty()) limpio.put(JSONObject().apply { put("p", pal); put("c", col) })
+                }
+                palabras = limpio; evento = "estado"
+            }
             a == "config" -> {
                 val nv = v ?: return false; val na = am ?: return false
                 if (nv < 1 || na <= nv || na > 120) return false
