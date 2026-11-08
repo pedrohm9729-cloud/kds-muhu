@@ -170,11 +170,11 @@ object Reporte {
             Triple("Comandas", hist.size.toString(), TINTA),
             Triple("Tiempo promedio", mmss(prom), color(prom)),
             Triple("A tiempo (< $verde min)", "${aTiempo * 100 / hist.size}%", VERDE),
-            Triple("Fuera de tiempo (≥ $ambar min)", fuera.toString(), if (fuera > 0) ROJO else TINTA),
+            Triple("Fuera de tiempo", fuera.toString(), if (fuera > 0) ROJO else TINTA),
             Triple("Productos preparados", nProductos.toString(), TINTA),
             Triple("Más rápida", "${mmss(rapida.min)} · Mesa ${rapida.mesa ?: "-"}", VERDE),
             Triple("Más lenta", "${mmss(lenta.min)} · Mesa ${lenta.mesa ?: "-"}", color(lenta.min)),
-            Triple("Producto que más demoró", prodLento?.key ?: "-", AMBAR),
+            Triple("Producto más lento", prodLento?.key ?: "-", AMBAR),
         )
         val gap = 8f
         val tw = (W - 2 * M - 3 * gap) / 4
@@ -185,7 +185,19 @@ object Reporte {
             h.c.drawRoundRect(RectF(x, y, x + tw, y + th), 6f, 6f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = FONDO })
             h.c.drawText(encaja(et.uppercase(), tw - 16, p(7f, GRIS, true)), x + 8, y + 16, p(7f, GRIS, true))
             val grande = if (i < 5) 17f else 11f
-            h.c.drawText(encaja(valor, tw - 16, p(grande, col, true)), x + 8, y + 40, p(grande, col, true))
+            val pg = p(grande, col, true)
+            if (i == 7 && pg.measureText(valor) > tw - 16) {          // nombre largo: dos líneas
+                val p10 = p(10f, col, true)
+                val pal = valor.split(" ").toMutableList()
+                var l1 = ""
+                while (pal.isNotEmpty() && p10.measureText((l1 + " " + pal[0]).trim()) <= tw - 16) {
+                    l1 = (l1 + " " + pal.removeAt(0)).trim()
+                }
+                h.c.drawText(l1, x + 8, y + 33, p10)
+                h.c.drawText(encaja(pal.joinToString(" "), tw - 16, p10), x + 8, y + 46, p10)
+            } else {
+                h.c.drawText(encaja(valor, tw - 16, pg), x + 8, y + 40, pg)
+            }
         }
         h.y += 2 * th + gap + 6f
         if (prodLento != null) {
