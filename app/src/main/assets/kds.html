@@ -296,7 +296,7 @@ function vTiempos(){
 let repF=null,repT="",sUrl=null,sClave=null;
 function sheetsHtml(){const y=est.sync||{};
  const estado=!y.activo?"No conectado":y.error?`⚠️ ${esc(y.error)}`:`✅ Conectado${y.ultimo_ok?" · último envío "+hhmm(y.ultimo_ok).slice(0,5):""}`;
- return `<h3>Google Sheets (ver en línea)</h3><div class="aj"><span class="sub" style="flex-basis:100%">${estado} · ${y.pendientes||0} comanda(s) por enviar</span>
+ return `<h3>Google Sheets (ver en línea)</h3><div class="aj"><span class="sub" style="flex-basis:100%">${estado} · ${y.pendientes||0} comanda(s) por enviar${y.fallidas?` · ${y.fallidas} apartada(s) por error`:""}</span>
  <label style="flex:1 1 320px">URL de la aplicación web <input id="sUrl" value="${esc(sUrl??(y.url||""))}" placeholder="https://script.google.com/macros/s/.../exec" style="width:100%"></label>
  <label>Clave <input id="sClave" value="${esc(sClave??(y.clave||""))}" style="width:200px"></label>
  <button class="b" id="btnSync">Guardar y conectar</button>${y.activo?'<button class="b" id="btnSyncYa">Enviar ahora</button>':""}

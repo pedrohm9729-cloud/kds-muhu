@@ -107,40 +107,75 @@ class Sync(private val dir: File) {
     /** Pide un envío inmediato (por ejemplo al pulsar "Probar conexión"). */
     fun enviarAhora() = thread(isDaemon = true) { try { enviarLote() } catch (_: Exception) { } }
 
+    private val archFallidas = File(dir, "sync_fallidas.jsonl")
+
+    /** Resultado de un envío: ok, o el motivo del error. */
+    private class Res(val ok: Boolean, val error: String? = null, val global: Boolean = false)
+
+    private fun enviar(filas: List<String>): Res {
+        val arr = JSONArray()
+        filas.forEach { try { arr.put(JSONObject(it)) } catch (_: Exception) { } }
+        val cuerpo = JSONObject().apply { put("clave", clave); put("filas", arr) }.toString()
+        val respuesta = try { post(url, cuerpo) } catch (e: Exception) {
+            return Res(false, "Sin conexión con Google Sheets (${e.javaClass.simpleName})", global = true)
+        }
+        val r = try { JSONObject(respuesta) } catch (_: Exception) { null }
+        if (r != null && r.optBoolean("ok")) return Res(true)
+        if (r != null && r.optString("error") == "clave") return Res(false, "La clave no coincide con la de la hoja", global = true)
+        if (r != null) return Res(false, "Error de la hoja: ${r.optString("error")}")
+        try { File(dir, "sync_ultima_respuesta.html").writeText(respuesta) } catch (_: Exception) { }
+        if (respuesta.contains("accounts.google.com/v3/signin") || respuesta.contains("ServiceLogin"))
+            return Res(false, "Google pide iniciar sesión: en Apps Script, el acceso debe ser \"Cualquier usuario\"", global = true)
+        // Página de error de Apps Script: el mensaje viene en un <div> monoespaciado
+        val texto = (Regex("monospace[^>]*>([^<]+)</div>").findAll(respuesta).lastOrNull()?.groupValues?.get(1)
+            ?: Regex("<title>(.*?)</title>", RegexOption.IGNORE_CASE).find(respuesta)?.groupValues?.get(1) ?: "página inesperada")
+            .replace("&quot;", "\"").replace("&#39;", "'").replace("&amp;", "&")
+        return Res(false, "Google respondió un error: ${texto.trim().take(180)}")
+    }
+
+    private fun quitarDeCola(enviadas: Collection<String>) = synchronized(lock) {
+        val actuales = if (archCola.exists()) archCola.readLines().filter { it.isNotBlank() }.toMutableList() else mutableListOf()
+        enviadas.forEach { actuales.remove(it) }
+        archCola.writeText(if (actuales.isEmpty()) "" else actuales.joinToString("\n", postfix = "\n"))
+    }
+
     private fun enviarLote() {
         if (!activo) return
         val lote = synchronized(lock) {
-            if (!archCola.exists()) emptyList() else archCola.readLines().filter { it.isNotBlank() }.take(200)
+            if (!archCola.exists()) emptyList() else archCola.readLines().filter { it.isNotBlank() }.take(50)
         }
-        val filas = JSONArray()
-        lote.forEach { try { filas.put(JSONObject(it)) } catch (_: Exception) { } }
-        val cuerpo = JSONObject().apply { put("clave", clave); put("filas", filas) }.toString()
+        if (lote.isEmpty()) return
+        val r = enviar(lote)
+        if (r.ok) { quitarDeCola(lote); exito(); return }
+        if (r.global) { marcarError(r.error ?: "Error"); return }
 
-        val respuesta = try { post(url, cuerpo) } catch (e: Exception) {
-            marcarError("Sin conexión con Google Sheets (${e.javaClass.simpleName})"); return
+        // Algo de este lote hace fallar la hoja: se prueba de a una para que una comanda mala no bloquee las demás
+        val buenas = mutableListOf<String>(); val malas = mutableListOf<String>()
+        var ultimoError = r.error
+        for (f in lote) {
+            val x = enviar(listOf(f))
+            if (x.ok) buenas += f
+            else { if (x.global) { marcarError(x.error ?: "Error"); break }; malas += f; ultimoError = x.error }
         }
-        val r = try { JSONObject(respuesta) } catch (_: Exception) { null }
-        if (r == null || !r.optBoolean("ok")) {
-            marcarError(when (r?.optString("error")) {
-                "clave" -> "La clave no coincide con la de la hoja"
-                null -> if (respuesta.contains("accounts.google.com") || respuesta.contains("<html", true))
-                    "Google pide iniciar sesión: en Apps Script, el acceso debe ser \"Cualquier usuario\""
-                    else "Respuesta inesperada. Revisa la URL de la aplicación web"
-                else -> "Error de la hoja: ${r.optString("error")}"
-            })
-            return
-        }
-        synchronized(lock) {
-            // Quita lo enviado; lo que llegó mientras tanto queda en la cola
-            val actuales = if (archCola.exists()) archCola.readLines().filter { it.isNotBlank() } else emptyList()
-            val resto = actuales.drop(lote.size)
-            archCola.writeText(if (resto.isEmpty()) "" else resto.joinToString("\n", postfix = "\n"))
-        }
+        if (buenas.isNotEmpty()) {
+            quitarDeCola(buenas)
+            // Solo se apartan las que fallan cuando otras sí pasaron (el problema es de esa comanda, no de la hoja)
+            if (malas.isNotEmpty()) {
+                synchronized(lock) { try { archFallidas.appendText(malas.joinToString("\n", postfix = "\n")) } catch (_: Exception) { } }
+                quitarDeCola(malas)
+            }
+            exito()
+        } else marcarError(ultimoError ?: "Error")
+    }
+
+    private fun exito() {
         error = null
         ultimoOk = System.currentTimeMillis() / 1000.0
         guardarConf()
         alCambiar?.invoke()
     }
+
+    fun fallidas(): Int = synchronized(lock) { if (!archFallidas.exists()) 0 else archFallidas.readLines().count { it.isNotBlank() } }
 
     private fun marcarError(m: String) {
         if (error != m) { error = m; alCambiar?.invoke() }

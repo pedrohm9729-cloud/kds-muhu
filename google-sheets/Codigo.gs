@@ -13,6 +13,10 @@
 const CLAVE = 'b64b96a9cf53f9560fc12b88';   // la misma que se pone en el KDS
 
 function doPost(e) {
+  try { return procesar(e); } catch (err) { return salida({ ok: false, error: String(err) }); }
+}
+
+function procesar(e) {
   let d;
   try { d = JSON.parse(e.postData.contents); } catch (err) { return salida({ ok: false, error: 'json' }); }
   if (d.clave !== CLAVE) return salida({ ok: false, error: 'clave' });
@@ -31,12 +35,12 @@ function doPost(e) {
     }
     const nuevasC = [];
     const nuevasP = [];
-    let actualizadas = 0;
+    let actualizadas = 0, errores = 0;
 
-    (d.filas || []).forEach(r => {
+    (d.filas || []).forEach(r => { try {
       const clave = r.fecha + '#' + r.id + '#' + r.entro;
       const dia = fecha(r.fecha, '00:00:00');
-      const prods = r.productos || [];
+      const prods = Array.isArray(r.productos) ? r.productos.filter(p => Array.isArray(p)) : [];
       const turno = (r.turno === 'AM' || r.turno === 'PM') ? r.turno : (String(r.entro) < '14:30' ? 'AM' : 'PM');
       const fila = [r.id, dia, r.mesa || '', r.zona || '', r.titulo || '', r.encargado || '', r.mozo || '',
         fecha(r.fecha, r.entro), fecha(r.fecha, r.listo), Number(r.minutos),
@@ -50,11 +54,11 @@ function doPost(e) {
       filaDeClave[clave] = -1;
       nuevasC.push(fila);
       prods.forEach(p => nuevasP.push([dia, r.id, p[1], Number(String(p[0]).replace(',', '.')) || 1, Number(r.minutos), clave, turno]));
-    });
+    } catch (err) { errores++; } });   // una fila con problemas no frena a las demás
 
     if (nuevasC.length) hojaC.getRange(hojaC.getLastRow() + 1, 1, nuevasC.length, 15).setValues(nuevasC);
     if (nuevasP.length) hojaP.getRange(hojaP.getLastRow() + 1, 1, nuevasP.length, 7).setValues(nuevasP);
-    return salida({ ok: true, nuevas: nuevasC.length, actualizadas: actualizadas });
+    return salida({ ok: true, nuevas: nuevasC.length, actualizadas: actualizadas, errores: errores });
   } finally {
     lock.releaseLock();
   }
