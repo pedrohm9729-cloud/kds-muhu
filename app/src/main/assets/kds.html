@@ -59,6 +59,7 @@ li.cancel .p,li.cancel .m{text-decoration:line-through;color:#ff9a95}
 .acc{padding:0 10px 12px;display:flex}
 .pw{font-weight:800}li.cancel .pw{color:inherit!important}
 .et{font:800 15px/1 var(--f-disp);letter-spacing:1px;padding:4px 8px 3px;border-radius:6px;margin-left:8px;vertical-align:4px;display:inline-block;background:#f3eee6;color:#14120f}
+.card.anulada{border-color:#6b625a}.card.anulada .top{background:#4a443e;color:#e9e2d8}
 .et.adic{background:var(--azul);color:#fff}
 .et.rappi{background:#14120f;color:#ff6a47;box-shadow:inset 0 0 0 2px #ff6a47}
 #menu{position:fixed;top:60px;right:16px;z-index:25;background:var(--rail);border:1px solid var(--linea);border-radius:14px;padding:8px;display:flex;flex-direction:column;gap:4px;min-width:230px;box-shadow:0 10px 30px #0009}
@@ -147,7 +148,6 @@ h3{font:800 16px var(--f-disp);letter-spacing:1.4px;text-transform:uppercase;col
 </div>
 <button class="b" id="btnVistaC" hidden title="Letra y diseño">⚙</button>
 <div id="menu" hidden>
- <button id="btnRec">↩ Recuperar última comanda</button>
  <button id="btnVista">Aa · Letra y diseño</button>
  <button id="btnTotal"></button>
  <button id="btnRecargar">⟳ Recargar pantalla</button>
@@ -158,6 +158,7 @@ h3{font:800 16px var(--f-disp);letter-spacing:1.4px;text-transform:uppercase;col
   <nav><a href="#cocina" data-v="cocina">Cocina</a><a href="#barra" data-v="barra" id="navBarra" hidden>Barra</a><a href="#caja" data-v="caja">Caja</a><a href="#tiempos" data-v="tiempos">Tiempos</a><a href="#ajustes" data-v="ajustes" title="Ajustes">⚙</a></nav>
   <span class="esp"></span>
   <button class="chip enc" id="btnTurno" title="Cambiar de encargado">👤 <b id="encNom">–</b> · <b id="encTurno">–</b> · desde <b id="encDesde">–</b> · <span id="encAcc">Cambiar turno</span></button>
+  <button class="b" id="btnRec" title="Volver a mostrar la última comanda despachada">↩ Recuperar</button>
   <button class="b" id="btnMenu" title="Más opciones" style="font-size:20px;padding:4px 14px">⋯</button>
 </div></div></header>
 <main class="wrap"><div id="vista"></div></main>
@@ -205,6 +206,10 @@ const deEst=v=>est.estaciones&&(v==="cocina"||v==="barra")?v:null;
 function nomCli(c){const t=(c.titulo||"").trim();if(t&&!/formato no reconocido/i.test(t))return t;if(c.mesa&&c.mesa!=="0")return "Mesa "+c.mesa;return "#"+c.id}
 const esLlevar=c=>{const t=norm([c.mesa,c.zona,c.titulo].join(" "));return t.includes("llevar")||t.includes("rappi")};
 function tarjeta(c,modo){
+ if(c.estado==="anulada"){const st=deEst(modo);
+  const its=c.items.filter(it=>!st||(it.est||"cocina")===st).map(it=>`<li class="cancel"><div class="p"><span class="q">${esc(it.cant)}×</span>${esc(it.producto)}</div></li>`).join("");
+  return `<div class="card anulada"><div class="top"><span class="mesa">${c.mesa&&c.mesa!=="0"?"Mesa "+esc(c.mesa):"Pedido #"+c.id}</span><span class="reloj">ANULADA</span></div>
+  ${c.titulo?`<div class="titulo">📝 ${esc(c.titulo)}</div>`:""}<ul>${its}</ul><div class="acc"><button class="entregado" data-a="entregado" data-id="${c.id}">OK, QUITAR</button></div></div>`}
  const t=ahora(),min=(t-c.recibida_ts)/60,st=deEst(modo),L=c.listas||{};
  const prep=modo==="cocina"||modo==="barra",abierta=st?abiertaEn(c,st):c.estado==="abierta";
  const fin=st?(L[st]||c.lista_ts):c.lista_ts;
@@ -236,8 +241,9 @@ function vTablero(modo){
  const suyas=st?est.comandas.filter(c=>c.items.some(i=>(i.est||"cocina")===st)):est.comandas;
  const ab=suyas.filter(c=>st?abiertaEn(c,st):c.estado==="abierta").sort((a,b)=>a.recibida_ts-b.recibida_ts);
  const fin=c=>st?((c.listas||{})[st]||c.lista_ts||0):c.lista_ts;
- const li=suyas.filter(c=>!ab.includes(c)&&(st||c.estado==="lista")).sort((a,b)=>fin(b)-fin(a));
- let h="";
+ const an=suyas.filter(c=>c.estado==="anulada");
+ const li=suyas.filter(c=>!ab.includes(c)&&c.estado!=="anulada"&&(st||c.estado==="lista")).sort((a,b)=>fin(b)-fin(a));
+ let h=an.map(c=>tarjeta(c,modo)).join("");
  if(modo==="caja"&&li.length)h+=`<div class="sec">🔔 Listo para entregar</div>${li.map(c=>tarjeta(c,modo)).join("")}<div class="sec">En preparación</div>`;
  h+=ab.length?ab.map(c=>tarjeta(c,modo)).join(""):`<div class="vacio">Sin comandas pendientes</div>`;
  if(prep&&li.length)h+=`<div class="sec">Despachadas recientes</div>${li.slice(0,4).map(c=>tarjeta(c,modo)).join("")}`;

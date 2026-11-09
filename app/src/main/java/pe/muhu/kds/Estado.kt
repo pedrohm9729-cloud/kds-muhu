@@ -161,6 +161,7 @@ class Estado(private val dir: File) {
                 o.optJSONObject("listas")?.let { l -> l.keys().forEach { c.listas[it] = l.getDouble(it) } }
                 comandas.add(c)
             }
+            comandas.forEach { cerrarSiAnulada(it) }      // comandas trabadas de versiones anteriores
         } catch (_: Exception) { }
     }
 
@@ -295,10 +296,18 @@ class Estado(private val dir: File) {
 
     // --------------------------------------------------------------- lógica
     /** Si todas las estaciones de la comanda terminaron, queda lista. */
+    /** Si todos sus productos fueron anulados, la comanda queda ANULADA: se detiene el reloj y no cuenta en los tiempos. */
+    private fun cerrarSiAnulada(c: Comanda): Boolean {
+        if (c.estado != "abierta" || c.items.any { !it.cancelado }) return false
+        c.estado = "anulada"; c.lista = ahora()
+        return true
+    }
+
     private fun revisarLista(c: Comanda): Boolean {
         if (c.estado != "abierta") return false
+        if (cerrarSiAnulada(c)) return false
         val sts = estacionesDe(c)
-        if (c.items.none { !it.cancelado } || !sts.all { it in c.listas }) return false
+        if (!sts.all { it in c.listas }) return false
         c.estado = "lista"; c.lista = sts.mapNotNull { c.listas[it] }.maxOrNull() ?: ahora()
         registrarHist(c)
         return true
@@ -368,6 +377,7 @@ class Estado(private val dir: File) {
         val c = Comanda(seq, p.mesa, p.zona, p.titulo, p.mozo, p.hora,
             (p.items + sinMatch).toMutableList(), recibida = t, actualizada = t, adicional = adicional)
         comandas.add(c)
+        cerrarSiAnulada(c)      // ticket solo de anulaciones (de algo ya despachado): no queda corriendo
         cambio(if (p.items.isNotEmpty()) "nueva" else "anulacion", af)
         return c.id
     }
@@ -428,6 +438,9 @@ class Estado(private val dir: File) {
             a == "item" && c != null && idx != null && idx in c.items.indices -> {
                 c.items[idx].hecho = !c.items[idx].hecho; evento = "estado"
             }
+            a == "listo" && c != null && c.estado == "abierta" && c.items.none { !it.cancelado } -> {
+                cerrarSiAnulada(c); evento = "estado"
+            }
             a == "listo" && c != null && c.estado == "abierta" -> {
                 val sts = estacionesDe(c)
                 if (e == null || e !in sts) sts.forEach { c.listas.putIfAbsent(it, ahora()) }
@@ -451,7 +464,7 @@ class Estado(private val dir: File) {
         }
         // Las despachadas hace más de 30 min salen de pantalla
         val lim = ahora() - 1800
-        comandas.removeAll { it.estado == "lista" && (it.lista ?: 0.0) < lim }
+        comandas.removeAll { (it.estado == "lista" || it.estado == "anulada") && (it.lista ?: 0.0) < lim }
         cambio(evento, af)
         true
     }
