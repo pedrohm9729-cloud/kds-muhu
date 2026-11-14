@@ -46,6 +46,7 @@ class ServidorImpresora(private val estado: Estado, private val capturas: File,
     fun detener() { try { srv?.close() } catch (_: Exception) { } }
 
     private fun atender(cx: Socket) {
+        val origen = try { cx.inetAddress.hostAddress ?: "?" } catch (_: Exception) { "?" }
         val buf = java.io.ByteArrayOutputStream()
         try {
             cx.soTimeout = 2000
@@ -75,18 +76,25 @@ class ServidorImpresora(private val estado: Estado, private val capturas: File,
             capturas.listFiles()?.sortedBy { it.name }?.dropLast(300)?.forEach { it.delete() }
         } catch (_: Exception) { }
 
-        val texto = Parser.escposATexto(data)
-        val p = Parser.parsear(texto)
+        val texto = try { Parser.escposATexto(data) } catch (_: Exception) { String(data, Charsets.ISO_8859_1) }
+        val p = try { Parser.parsear(texto) } catch (_: Exception) { Parseada() }
         if (p.items.isEmpty() && p.cancelados.isEmpty()) {
             val lineas = texto.lines().map { it.trim() }.filter { it.isNotEmpty() }
-            if (lineas.isEmpty() || lineas.any { it.uppercase().contains("ANCHO") }) return  // prueba de Wally
+            if (lineas.isEmpty() || lineas.any { it.uppercase().contains("ANCHO") }) {   // prueba de Wally
+                estado.registrarRecepcion(origen, data.size, p, "Prueba de impresora (ignorada)"); return
+            }
             // Nunca perder una comanda: si no se entiende el formato, se muestra tal cual
             val cuerpo = lineas.filter { !Parser.SEP.matches(it) }.take(25)
             if (cuerpo.isEmpty()) p.items.add(Item("", "(comanda en imagen: ver impresora)"))
             else cuerpo.forEach { p.items.add(Item("", it)) }
             if (p.titulo == null) p.titulo = "Formato no reconocido: revisar"
         }
-        estado.nuevaComanda(p, barra)
+        try {
+            val id = estado.nuevaComanda(p, barra)
+            estado.registrarRecepcion(origen, data.size, p, "Mostrada · comanda #$id")
+        } catch (e: Exception) {
+            estado.registrarRecepcion(origen, data.size, p, "ERROR: ${e.javaClass.simpleName}")
+        }
     }
 }
 

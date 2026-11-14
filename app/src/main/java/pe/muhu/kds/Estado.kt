@@ -67,6 +67,17 @@ class Estado(private val dir: File) {
     var ambar = 10; private set
     var ip: String = "-"
     private var afecta: Set<String> = emptySet()
+    /** Últimos tickets que llegaron por la impresora virtual (diagnóstico). */
+    private val recibidos = java.util.ArrayDeque<JSONObject>()
+
+    fun registrarRecepcion(origen: String, bytes: Int, p: Parseada, resultado: String) = synchronized(lock) {
+        recibidos.addFirst(JSONObject().apply {
+            put("hora", hhmmss(ahora())); put("origen", origen); put("bytes", bytes)
+            put("mesa", p.mesa ?: ""); put("titulo", p.titulo ?: ""); put("mozo", p.mozo ?: "")
+            put("productos", p.items.size); put("resultado", resultado)
+        })
+        while (recibidos.size > 30) recibidos.removeLast()
+    }
 
     val clientes = CopyOnWriteArrayList<LinkedBlockingQueue<String>>()
     /** Aviso al servicio para sonar en la tablet: (evento, estaciones afectadas). */
@@ -262,6 +273,7 @@ class Estado(private val dir: File) {
         JSONObject().apply {
             put("evento", evento); put("ahora", ahora()); put("verde", verde); put("ambar", ambar)
             put("afecta", JSONArray(afecta.toList()))
+            put("recibidos", JSONArray(recibidos.toList()))
             put("palabras", palabras); put("estaciones", estaciones); put("barra", barraPal)
             put("encargado", encargado.j()); put("turno_desde", turnoDesde.j()); put("ip", ip)
             put("turno", turno.j())

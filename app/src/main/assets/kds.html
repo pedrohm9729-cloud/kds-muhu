@@ -60,6 +60,8 @@ li.cancel .p,li.cancel .m{text-decoration:line-through;color:#ff9a95}
 .pw{font-weight:800}li.cancel .pw{color:inherit!important}
 .et{font:800 15px/1 var(--f-disp);letter-spacing:1px;padding:4px 8px 3px;border-radius:6px;margin-left:8px;vertical-align:4px;display:inline-block;background:#f3eee6;color:#14120f}
 .card.anulada{border-color:#6b625a}.card.anulada .top{background:#4a443e;color:#e9e2d8}
+.m.sin{color:#ff6b62;font-weight:800;font-size:1.08em;letter-spacing:.2px}li.cancel .m.sin{color:inherit}
+.m.nota{color:var(--resalta);font-weight:600}
 .et.adic{background:var(--azul);color:#fff}
 .et.rappi{background:#14120f;color:#ff6a47;box-shadow:inset 0 0 0 2px #ff6a47}
 #menu{position:fixed;top:60px;right:16px;z-index:25;background:var(--rail);border:1px solid var(--linea);border-radius:14px;padding:8px;display:flex;flex-direction:column;gap:4px;min-width:230px;box-shadow:0 10px 30px #0009}
@@ -205,6 +207,11 @@ const abiertaEn=(c,st)=>c.estado==="abierta"&&!(c.listas||{})[st];
 const deEst=v=>est.estaciones&&(v==="cocina"||v==="barra")?v:null;
 function nomCli(c){const t=(c.titulo||"").trim();if(t&&!/formato no reconocido/i.test(t))return t;if(c.mesa&&c.mesa!=="0")return "Mesa "+c.mesa;return "#"+c.id}
 const esLlevar=c=>{const t=norm([c.mesa,c.zona,c.titulo].join(" "));return t.includes("llevar")||t.includes("rappi")};
+/** Modificadores: "SIN …" destacado en rojo, notas aparte, el resto con "+". */
+function modHtml(m){
+ if(/^SIN /i.test(m))return `<div class="m sin">❌ SIN ${pal(m.slice(4))}</div>`;
+ if(/^Nota\s*:/i.test(m))return `<div class="m nota">📝 ${pal(m.replace(/^Nota\s*:\s*/i,""))}</div>`;
+ return `<div class="m">+ ${pal(m)}</div>`}
 function tarjeta(c,modo){
  if(c.estado==="anulada"){const st=deEst(modo);
   const its=c.items.filter(it=>!st||(it.est||"cocina")===st).map(it=>`<li class="cancel"><div class="p"><span class="q">${esc(it.cant)}×</span>${esc(it.producto)}</div></li>`).join("");
@@ -217,7 +224,7 @@ function tarjeta(c,modo){
  const items=c.items.map((it,i)=>[it,i]).filter(([it])=>!st||(it.est||"cocina")===st).map(([it,i])=>{
   const k=it.cancelado?"cancel":it.hecho?"hecho":"",tap=prep&&abierta&&!it.cancelado;
   const tag=it.cancelado?'<span class="tag anul">ANULADO</span>':it.marca==="cambio"?'<span class="tag cambio">CAMBIO</span>':it.marca==="nuevo"?'<span class="tag nuevo">NUEVO</span>':"";
-  return `<li class="${k}${tap?" tap":""}" ${tap?`data-a="item" data-id="${c.id}" data-i="${i}" role="button" tabindex="0"`:""}><div class="p"><span class="q">${esc(it.cant)}×</span>${pal(it.producto)}${tag}</div>${(it.mods||[]).map(m=>`<div class="m">+ ${pal(m)}</div>`).join("")}</li>`}).join("");
+  return `<li class="${k}${tap?" tap":""}" ${tap?`data-a="item" data-id="${c.id}" data-i="${i}" role="button" tabindex="0"`:""}><div class="p"><span class="q">${esc(it.cant)}×</span>${pal(it.producto)}${tag}</div>${(it.mods||[]).map(modHtml).join("")}</li>`}).join("");
  let acc="",extra="";
  if(prep&&abierta)acc=`<div class="acc"><button class="listo" data-a="listo" data-id="${c.id}"${st?` data-est="${st}"`:""}>✓ LISTO</button></div>`;
  if(modo==="caja"&&c.estado==="lista")acc=`<div class="acc"><button class="entregado" data-a="entregado" data-id="${c.id}">ENTREGADO</button></div>`;
@@ -318,8 +325,12 @@ function reporteHtml(){const and=!!window.Android;if(!repF)repF=hoyLocal();
  <label>Turno <select id="repT">${[["","Todo el día"],["AM","Turno AM"],["PM","Turno PM"]].map(([v,t])=>`<option value="${v}" ${repT===v?"selected":""}>${t}</option>`).join("")}</select></label>
  <button class="b" id="btnRep">📄 ${and?"Compartir reporte PDF":"Descargar reporte PDF"}</button>
  <span class="sub">Comandas, tiempo de cada una, promedio, producto que más demoró y resultado por encargado. Listo para enviar al grupo de cocina.</span></div>`}
+function recibidosHtml(){const R=est.recibidos||[];
+ return `<h3>Tickets recibidos (últimos ${R.length})</h3><div class="aj"><span class="sub" style="margin:0 0 6px;flex-basis:100%">Cada ticket que Wally mandó a esta pantalla desde que se abrió la app. Si un pedido no aparece aquí, no llegó: revisa la impresora del KDS en el equipo que lo tomó.</span>
+ ${R.length?`<div class="tbl" style="flex-basis:100%"><table><tr><th>Hora</th><th>Equipo (IP)</th><th>Mesa</th><th>Tomó</th><th>Prod.</th><th>Resultado</th></tr>${R.map(r=>`<tr><td class="n">${esc(r.hora)}</td><td class="n">${esc(r.origen)}</td><td>${esc(r.mesa||r.titulo||"–")}</td><td>${esc(r.mozo||"–")}</td><td class="n">${r.productos}</td><td>${esc(r.resultado)}</td></tr>`).join("")}</table></div>`:'<span class="sub">Todavía no llegó ningún ticket.</span>'}</div>`}
 function vAjustes(){const and=!!window.Android,ip=esc(est.ip||"–");
  return `<h3>Conexión con Wally</h3><div class="aj"><span class="sub" style="margin:0">En Wally: impresora <b>BIENEX E802</b>, ancho 48, IP <code>${ip}</code>, puerto <code>9100</code>.</span></div>
+ ${recibidosHtml()}
  ${estacHtml()}
  ${palHtml()}
  ${and?`<h3>Sonido</h3><div class="aj">

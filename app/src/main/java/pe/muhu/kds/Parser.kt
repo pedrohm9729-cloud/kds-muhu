@@ -41,7 +41,7 @@ object Parser {
         while (i < n) {
             val x = b(i)
             when {
-                x == 0x1B -> { val c = b(i + 1); i += if (c == 0x40 || c == 0x3C) 2 else 3 }
+                x == 0x1B -> { val c = b(i + 1); i += when (c) { 0x40, 0x3C, 0x32 -> 2; 0x70 -> 5; else -> 3 } }
                 x == 0x1D -> {
                     val c = b(i + 1)
                     i += when {
@@ -72,6 +72,9 @@ object Parser {
     val ITEM = Regex("^(\\d+(?:[.,]\\d+)?)\\s+(?:Un\\.?\\s+)?(.+)$")
     private val CANCEL = Regex("PRODUCTOS?\\s+CANCEL", I)
     private val CANCEL_COMPLETO = Regex("CANCELADOS?\\s*$", I)
+    /** Sección de ingredientes a quitar: "--- QUITAR ---" seguida de líneas "- grupo: valor;" */
+    private val QUITAR = Regex("^-+\\s*QUITAR\\s*-*$", I)
+    private val NOTA = Regex("^Nota\\s*:", I)
     private val ADOS = Regex("^a?dos?$", I)
 
     private fun limpiar(s: String) = s.trim(' ', '.').ifEmpty { null }
@@ -114,8 +117,19 @@ object Parser {
         var actual: Item? = null
         var ultMod = false
         var saltarAdos = false
+        var quitar = false
         for (l in cuerpo) {
-            if (SEP.matches(l)) { actual = null; ultMod = false; continue }
+            if (SEP.matches(l)) { actual = null; ultMod = false; quitar = false; continue }
+            if (QUITAR.matches(l)) { quitar = actual != null; ultMod = false; continue }
+            if (quitar && l.startsWith("-")) {
+                // "- salsas: mayonesa;" → "SIN salsas: mayonesa" (se limpia al final)
+                actual?.let { it.mods.add("SIN " + l.trimStart('-', ' ').trimEnd(' ', ';')); ultMod = true }
+                continue
+            }
+            if (NOTA.containsMatchIn(l)) {
+                actual?.let { it.mods.add(l.trimEnd(' ', ';')); ultMod = true }
+                continue
+            }
             if (CANCEL.containsMatchIn(l)) {
                 destino = c.cancelados; actual = null; ultMod = false
                 saltarAdos = !CANCEL_COMPLETO.containsMatchIn(l)
@@ -126,11 +140,13 @@ object Parser {
                 if (ADOS.matches(l)) continue
             }
             if (l.startsWith("+")) {
+                quitar = false
                 actual?.let { it.mods.add(l.trimStart('+', ' ').trimEnd(' ', ';')); ultMod = true }
                 continue
             }
             val m = ITEM.find(l)
             if (m != null) {
+                quitar = false
                 actual = Item(m.groupValues[1], m.groupValues[2].trim())
                 destino.add(actual)
                 ultMod = false
@@ -141,6 +157,16 @@ object Parser {
                     it.mods[it.mods.size - 1] = (it.mods.last() + " " + l).trimEnd(' ', ';')
                 } else {
                     it.producto += " $l"
+                }
+            }
+        }
+        // "SIN salsas: mayonesa" → "SIN mayonesa" (lo que importa en cocina es qué ingrediente quitar)
+        (c.items + c.cancelados).forEach { it2 ->
+            for (k in it2.mods.indices) {
+                val md = it2.mods[k]
+                if (md.startsWith("SIN ")) {
+                    val v = md.removePrefix("SIN ").let { t -> if (':' in t) t.substringAfter(':') else t }.trim().trimEnd(';')
+                    it2.mods[k] = "SIN " + v.ifEmpty { md.removePrefix("SIN ") }
                 }
             }
         }
